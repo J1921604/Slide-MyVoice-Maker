@@ -1,0 +1,5 @@
+edge-tts
+moviepy<2.0
+pymupdf
+pandas
+imageio-ffmpeg

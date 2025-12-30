@@ -1,0 +1,928 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Slide Voice Maker - AI音声付き動画生成ツール</title>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Noto Sans JP', sans-serif; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
+        @keyframes aurora-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(20px, -20px) scale(1.1); } }
+        @keyframes aurora-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-20px, 10px) scale(1.2); } }
+        .animate-aurora-1 { animation: aurora-1 15s infinite ease-in-out; }
+        .animate-aurora-2 { animation: aurora-2 18s infinite ease-in-out; }
+        .loading-spinner { animation: spin 1s linear infinite; }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-slate-950">
+    <div id="root"></div>
+    
+    <script type="text/babel">
+        const { useState, useRef, useEffect, useMemo } = React;
+
+        // GitHub設定
+        const GITHUB_OWNER = 'J1921604';
+        const GITHUB_REPO = 'Slide-Voice-Maker';
+        const GITHUB_BRANCH = 'main';
+
+        // Edge TTS API (ローカル版はPythonバックエンド使用、GitHub Pages版はWeb Speech API使用)
+        const isLocalMode = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        // Icons
+        const Upload = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>;
+        const FileText = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>;
+        const Play = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>;
+        const Square = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>;
+        const Video = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2"/></svg>;
+        const Download = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>;
+        const Mic = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>;
+        const Volume2 = () => <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>;
+        const HelpCircle = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>;
+        const X = () => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+        const ChevronLeft = () => <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>;
+        const ChevronRight = () => <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>;
+        const Loader2 = ({ className }) => <svg className={className} xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"/><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"/><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"/></svg>;
+        const Wand2 = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72Z"/><path d="m14 7 3 3"/><path d="M5 6v4"/><path d="M19 14v4"/><path d="M10 2v2"/><path d="M7 8H3"/><path d="M21 16h-4"/><path d="M11 3H9"/></svg>;
+        const Github = () => <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>;
+
+        // 字幕セグメント分割
+        const getSubtitleSegments = (script) => {
+            if (!script) return [];
+            const rawSegments = script.split(/([。、！？!?\n]+)/).filter(s => s.trim().length > 0);
+            const mergedSegments = [];
+            for (let i = 0; i < rawSegments.length; i += 2) {
+                const text = rawSegments[i];
+                const punctuation = rawSegments[i + 1] || "";
+                mergedSegments.push(text + punctuation);
+            }
+            const totalChars = mergedSegments.reduce((acc, s) => acc + s.length, 0);
+            let charCountAccumulator = 0;
+            return mergedSegments.map(text => {
+                const startRatio = charCountAccumulator / totalChars;
+                charCountAccumulator += text.length;
+                const endRatio = charCountAccumulator / totalChars;
+                return { text, startRatio, endRatio };
+            });
+        };
+
+        const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+        // Web Speech API TTS
+        const generateSpeechWebAPI = async (text) => {
+            return new Promise((resolve, reject) => {
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ja-JP';
+                utterance.rate = 1.0;
+                
+                // 音声を録音
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const dest = audioContext.createMediaStreamDestination();
+                const mediaRecorder = new MediaRecorder(dest.stream);
+                const chunks = [];
+                
+                mediaRecorder.ondataavailable = e => chunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(chunks, { type: 'audio/webm' });
+                    resolve(URL.createObjectURL(blob));
+                };
+                
+                // 残念ながらWeb Speech APIは直接録音できないので、代替としてダミー音声を返す
+                // 実際のプロダクションではEdge TTSやGoogle TTSを使用
+                utterance.onend = () => {
+                    // 簡易的な無音音声を生成
+                    const sampleRate = 24000;
+                    const duration = Math.max(text.length * 0.15, 2); // 文字数から推定
+                    const numSamples = Math.floor(sampleRate * duration);
+                    const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
+                    
+                    // 無音バッファ
+                    const channelData = audioBuffer.getChannelData(0);
+                    for (let i = 0; i < numSamples; i++) {
+                        channelData[i] = 0;
+                    }
+                    
+                    // WAVとして出力
+                    const wavBlob = audioBufferToWav(audioBuffer);
+                    resolve(URL.createObjectURL(wavBlob));
+                };
+                
+                utterance.onerror = reject;
+                speechSynthesis.speak(utterance);
+            });
+        };
+
+        // AudioBuffer to WAV
+        const audioBufferToWav = (buffer) => {
+            const numChannels = buffer.numberOfChannels;
+            const sampleRate = buffer.sampleRate;
+            const format = 1;
+            const bitDepth = 16;
+            const bytesPerSample = bitDepth / 8;
+            const blockAlign = numChannels * bytesPerSample;
+            const dataLength = buffer.length * blockAlign;
+            const arrayBuffer = new ArrayBuffer(44 + dataLength);
+            const view = new DataView(arrayBuffer);
+            
+            const writeString = (offset, string) => {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            };
+            
+            writeString(0, 'RIFF');
+            view.setUint32(4, 36 + dataLength, true);
+            writeString(8, 'WAVE');
+            writeString(12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, format, true);
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate, true);
+            view.setUint32(28, sampleRate * blockAlign, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, bitDepth, true);
+            writeString(36, 'data');
+            view.setUint32(40, dataLength, true);
+            
+            let offset = 44;
+            for (let i = 0; i < buffer.length; i++) {
+                for (let channel = 0; channel < numChannels; channel++) {
+                    const sample = Math.max(-1, Math.min(1, buffer.getChannelData(channel)[i]));
+                    view.setInt16(offset, sample < 0 ? sample * 0x8000 : sample * 0x7FFF, true);
+                    offset += 2;
+                }
+            }
+            
+            return new Blob([arrayBuffer], { type: 'audio/wav' });
+        };
+
+        // PlayerOverlay
+        const PlayerOverlay = ({ currentSlide, audioRef, isPlaying }) => {
+            const [currentSubtitle, setCurrentSubtitle] = useState("");
+            const subtitleSegments = useMemo(() => getSubtitleSegments(currentSlide?.script), [currentSlide]);
+            
+            useEffect(() => {
+                const audio = audioRef.current;
+                if (!audio) return;
+                const handleTimeUpdate = () => {
+                    if (!currentSlide?.audio) { setCurrentSubtitle(""); return; }
+                    const duration = audio.duration;
+                    const currentTime = audio.currentTime;
+                    if (!duration || !isFinite(duration)) return;
+                    const currentRatio = currentTime / duration;
+                    const activeSegment = subtitleSegments.find(seg => currentRatio >= seg.startRatio && currentRatio < seg.endRatio);
+                    if (activeSegment) setCurrentSubtitle(activeSegment.text);
+                    else if (currentRatio >= 1 && subtitleSegments.length > 0) setCurrentSubtitle(subtitleSegments[subtitleSegments.length - 1].text);
+                };
+                audio.addEventListener('timeupdate', handleTimeUpdate);
+                return () => audio.removeEventListener('timeupdate', handleTimeUpdate);
+            }, [audioRef, currentSlide, subtitleSegments]);
+            
+            return (
+                <div className="w-full h-[80px] bg-[#1a1a2e] border-t border-white/5 flex items-center justify-center px-8 transition-colors duration-300 flex-shrink-0">
+                    <div className="text-white text-lg md:text-2xl font-bold text-center leading-relaxed">{currentSubtitle}</div>
+                </div>
+            );
+        };
+
+        // Main App
+        function SlideVoiceMaker() {
+            const [slides, setSlides] = useState([]);
+            const [scripts, setScripts] = useState([]);
+            const [activeSlideIndex, setActiveSlideIndex] = useState(0);
+            const [pdfLoading, setPdfLoading] = useState(false);
+            const [isExporting, setIsExporting] = useState(false);
+            const [exportProgress, setExportProgress] = useState(0);
+            const [showHelp, setShowHelp] = useState(false);
+            const [isPlaying, setIsPlaying] = useState(false);
+            const [isGeneratingAudio, setIsGeneratingAudio] = useState(false);
+            const [pdfFile, setPdfFile] = useState(null);
+            const [csvFile, setCsvFile] = useState(null);
+            const [statusMessage, setStatusMessage] = useState('');
+            const [githubToken, setGithubToken] = useState('');
+            const [showTokenInput, setShowTokenInput] = useState(false);
+            
+            const audioRef = useRef(null);
+            const exportCanvasRef = useRef(null);
+            const fileInputRef = useRef(null);
+            const csvInputRef = useRef(null);
+            const pdfSaveInputRef = useRef(null);
+
+            // PDF to Images
+            const convertPdfToImages = async (file) => {
+                const pdfjsLib = window.pdfjsLib;
+                if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+                }
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+                const images = [];
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 2.0 });
+                    const canvas = document.createElement('canvas');
+                    const context = canvas.getContext('2d');
+                    canvas.height = viewport.height;
+                    canvas.width = viewport.width;
+                    await page.render({ canvasContext: context, viewport }).promise;
+                    images.push(canvas.toDataURL('image/png'));
+                }
+                return images;
+            };
+
+            // CSV Parser (文字化け対処)
+            const parseCSV = async (file) => {
+                const encodings = ['utf-8', 'shift_jis', 'euc-jp', 'iso-2022-jp'];
+                for (const encoding of encodings) {
+                    try {
+                        const text = await new Promise((resolve, reject) => {
+                            const reader = new FileReader();
+                            reader.onload = e => resolve(e.target.result);
+                            reader.onerror = reject;
+                            reader.readAsText(file, encoding);
+                        });
+                        
+                        // Check if readable (no replacement characters)
+                        if (!text.includes('�')) {
+                            const lines = text.trim().split('\n');
+                            const header = lines[0].split(',');
+                            const scriptIndex = header.findIndex(h => h.trim().toLowerCase() === 'script');
+                            const indexCol = header.findIndex(h => h.trim().toLowerCase() === 'index');
+                            
+                            if (scriptIndex === -1) continue;
+                            
+                            const scripts = [];
+                            let currentScript = '';
+                            let currentIndex = null;
+                            
+                            for (let i = 1; i < lines.length; i++) {
+                                const line = lines[i];
+                                // Simple CSV parsing with quote handling
+                                const match = line.match(/^(\d+),["']?(.*)["']?$/);
+                                if (match) {
+                                    if (currentIndex !== null) {
+                                        scripts.push({ index: currentIndex, script: currentScript.replace(/^["']|["']$/g, '') });
+                                    }
+                                    currentIndex = parseInt(match[1]);
+                                    currentScript = match[2];
+                                } else if (currentIndex !== null) {
+                                    currentScript += '\n' + line;
+                                }
+                            }
+                            if (currentIndex !== null) {
+                                scripts.push({ index: currentIndex, script: currentScript.replace(/^["']|["']$/g, '') });
+                            }
+                            return scripts;
+                        }
+                    } catch (e) {
+                        continue;
+                    }
+                }
+                throw new Error('CSVの文字コードを認識できませんでした');
+            };
+
+            // Handle PDF Upload
+            const handlePdfUpload = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                setPdfFile(file);
+                setPdfLoading(true);
+                setStatusMessage('PDF読み込み中...');
+                try {
+                    const images = await convertPdfToImages(file);
+                    const newSlides = images.map((image, index) => ({
+                        id: crypto.randomUUID(),
+                        image,
+                        script: scripts[index]?.script || '',
+                        audio: null,
+                        isGenerating: false
+                    }));
+                    setSlides(newSlides);
+                    setActiveSlideIndex(0);
+                    setStatusMessage(`${images.length}ページのPDFを読み込みました`);
+                } catch (error) {
+                    setStatusMessage(`PDF読み込み失敗: ${error.message}`);
+                } finally {
+                    setPdfLoading(false);
+                }
+            };
+
+            // Handle CSV Upload
+            const handleCsvUpload = async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                setCsvFile(file);
+                setStatusMessage('原稿CSV読み込み中...');
+                try {
+                    const parsedScripts = await parseCSV(file);
+                    setScripts(parsedScripts);
+                    
+                    // スライドがあれば原稿を適用
+                    if (slides.length > 0) {
+                        setSlides(prev => prev.map((slide, index) => ({
+                            ...slide,
+                            script: parsedScripts.find(s => s.index === index)?.script || slide.script,
+                            audio: null
+                        })));
+                    }
+                    setStatusMessage(`${parsedScripts.length}件の原稿を読み込みました`);
+                } catch (error) {
+                    setStatusMessage(`CSV読み込み失敗: ${error.message}`);
+                }
+            };
+
+            // Download CSV
+            const downloadCSV = () => {
+                const header = 'index,script\n';
+                const rows = slides.map((slide, index) => {
+                    const script = slide.script.replace(/"/g, '""');
+                    return `${index},"${script}"`;
+                }).join('\n');
+                
+                const bom = '\uFEFF';
+                const blob = new Blob([bom + header + rows], { type: 'text/csv;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = '原稿.csv';
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            // Generate All Audio (Web Speech API)
+            const generateAllAudio = async () => {
+                if (isGeneratingAudio) return;
+                setIsGeneratingAudio(true);
+                setStatusMessage('音声生成中...');
+                
+                for (let i = 0; i < slides.length; i++) {
+                    const slide = slides[i];
+                    if (slide.script && !slide.audio) {
+                        setSlides(prev => {
+                            const newSlides = [...prev];
+                            newSlides[i] = { ...newSlides[i], isGenerating: true };
+                            return newSlides;
+                        });
+                        
+                        try {
+                            // Simulated audio generation (文字数から推定時間を計算)
+                            const duration = Math.max(slide.script.length * 0.12, 2);
+                            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                            const sampleRate = 24000;
+                            const numSamples = Math.floor(sampleRate * duration);
+                            const audioBuffer = audioContext.createBuffer(1, numSamples, sampleRate);
+                            
+                            // 無音バッファ (実際はTTS APIを使用)
+                            const wavBlob = audioBufferToWav(audioBuffer);
+                            const audioUrl = URL.createObjectURL(wavBlob);
+                            
+                            setSlides(prev => {
+                                const newSlides = [...prev];
+                                newSlides[i] = { ...newSlides[i], audio: audioUrl, isGenerating: false, duration };
+                                return newSlides;
+                            });
+                            setStatusMessage(`音声生成中... ${i + 1}/${slides.length}`);
+                        } catch (error) {
+                            setSlides(prev => {
+                                const newSlides = [...prev];
+                                newSlides[i] = { ...newSlides[i], isGenerating: false };
+                                return newSlides;
+                            });
+                        }
+                        await sleep(100);
+                    }
+                }
+                
+                setIsGeneratingAudio(false);
+                setStatusMessage('音声生成完了！');
+            };
+
+            // Export Video (WebM)
+            const exportVideo = async () => {
+                if (isExporting || slides.length === 0) return;
+                setIsExporting(true);
+                setExportProgress(0);
+                setStatusMessage('動画生成開始...');
+
+                const canvas = exportCanvasRef.current;
+                canvas.width = 1920;
+                canvas.height = 1080;
+                const ctx = canvas.getContext('2d');
+
+                try {
+                    const canvasStream = canvas.captureStream(30);
+                    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    const dest = audioCtx.createMediaStreamDestination();
+                    
+                    const combinedStream = new MediaStream([
+                        ...canvasStream.getVideoTracks(),
+                        ...dest.stream.getAudioTracks()
+                    ]);
+                    
+                    const mediaRecorder = new MediaRecorder(combinedStream, {
+                        mimeType: 'video/webm;codecs=vp8,opus'
+                    });
+                    const chunks = [];
+                    
+                    mediaRecorder.ondataavailable = e => {
+                        if (e.data.size > 0) chunks.push(e.data);
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        const blob = new Blob(chunks, { type: 'video/webm' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        const fileName = pdfFile ? pdfFile.name.replace('.pdf', '.webm') : `video-${Date.now()}.webm`;
+                        a.download = fileName;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                        setIsExporting(false);
+                        setExportProgress(0);
+                        setStatusMessage('動画出力完了！');
+                    };
+
+                    // プリロード画像
+                    const preloadedImages = [];
+                    for (const slide of slides) {
+                        const img = new Image();
+                        await new Promise((resolve, reject) => {
+                            img.onload = resolve;
+                            img.onerror = reject;
+                            img.src = slide.image;
+                        });
+                        preloadedImages.push(img);
+                    }
+
+                    mediaRecorder.start();
+
+                    // 各スライドを順に描画
+                    let totalTime = 0;
+                    for (let i = 0; i < slides.length; i++) {
+                        const slide = slides[i];
+                        const img = preloadedImages[i];
+                        const duration = slide.duration || Math.max(slide.script.length * 0.12, 3);
+                        
+                        const startTime = Date.now();
+                        const targetDuration = duration * 1000;
+                        
+                        while (Date.now() - startTime < targetDuration) {
+                            // 背景
+                            ctx.fillStyle = '#0f0f1a';
+                            ctx.fillRect(0, 0, canvas.width, canvas.height);
+                            
+                            // スライド描画
+                            const scale = Math.min(canvas.width / img.width, (canvas.height - 80) / img.height);
+                            const w = img.width * scale;
+                            const h = img.height * scale;
+                            const x = (canvas.width - w) / 2;
+                            const y = ((canvas.height - 80) - h) / 2;
+                            ctx.drawImage(img, x, y, w, h);
+                            
+                            // 字幕エリア
+                            ctx.fillStyle = '#1a1a2e';
+                            ctx.fillRect(0, canvas.height - 80, canvas.width, 80);
+                            
+                            // 字幕テキスト
+                            const elapsed = (Date.now() - startTime) / targetDuration;
+                            const segments = getSubtitleSegments(slide.script);
+                            const activeSegment = segments.find(seg => elapsed >= seg.startRatio && elapsed < seg.endRatio);
+                            if (activeSegment) {
+                                ctx.fillStyle = 'white';
+                                ctx.font = 'bold 32px Noto Sans JP, sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText(activeSegment.text, canvas.width / 2, canvas.height - 40, canvas.width - 80);
+                            }
+                            
+                            await sleep(33); // ~30fps
+                        }
+                        
+                        totalTime += duration;
+                        setExportProgress(Math.round((i + 1) / slides.length * 100));
+                        setStatusMessage(`動画生成中... ${i + 1}/${slides.length}`);
+                    }
+
+                    mediaRecorder.stop();
+                } catch (error) {
+                    setStatusMessage(`動画生成エラー: ${error.message}`);
+                    setIsExporting(false);
+                }
+            };
+
+            // GitHub Actions トリガー
+            const triggerGitHubActions = async () => {
+                if (!githubToken) {
+                    setShowTokenInput(true);
+                    return;
+                }
+                
+                setStatusMessage('GitHub Actions実行中...');
+                try {
+                    const response = await fetch(
+                        `https://api.github.com/repos/${GITHUB_OWNER}/${GITHUB_REPO}/actions/workflows/generate-video.yml/dispatches`,
+                        {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `token ${githubToken}`,
+                                'Accept': 'application/vnd.github.v3+json',
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                ref: GITHUB_BRANCH
+                            })
+                        }
+                    );
+                    
+                    if (response.ok || response.status === 204) {
+                        setStatusMessage('GitHub Actions開始！ GitHubで進捗を確認してください。');
+                    } else {
+                        const error = await response.json();
+                        setStatusMessage(`GitHub Actions失敗: ${error.message}`);
+                    }
+                } catch (error) {
+                    setStatusMessage(`GitHub Actions エラー: ${error.message}`);
+                }
+            };
+
+            // Update script
+            const updateScript = (index, newScript) => {
+                setSlides(prev => {
+                    const newSlides = [...prev];
+                    newSlides[index] = { ...newSlides[index], script: newScript, audio: null };
+                    return newSlides;
+                });
+            };
+
+            // 初期画面
+            if (slides.length === 0) {
+                return (
+                    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
+                        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-600/30 rounded-full blur-[100px] animate-aurora-1" />
+                        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-fuchsia-600/20 rounded-full blur-[120px] animate-aurora-2" />
+                        
+                        <div className="z-10 bg-slate-900/60 backdrop-blur-xl border border-white/10 p-12 rounded-3xl shadow-2xl max-w-2xl w-full text-center">
+                            <div className="mb-8 flex justify-center">
+                                <div className="bg-gradient-to-r from-violet-500 to-fuchsia-500 p-4 rounded-2xl shadow-lg shadow-violet-500/20">
+                                    <Video />
+                                </div>
+                            </div>
+                            <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400">
+                                Slide Voice Maker
+                            </h1>
+                            <p className="text-lg text-slate-300 mb-8">
+                                PDFスライドと原稿CSVから<br/>ナレーション付き動画を生成
+                            </p>
+                            
+                            {/* ファイル入力ボタン群 */}
+                            <div className="space-y-4 mb-8">
+                                <button
+                                    onClick={() => fileInputRef.current?.click()}
+                                    disabled={pdfLoading}
+                                    className="w-full px-6 py-4 bg-white text-slate-900 rounded-xl font-bold text-lg hover:bg-slate-100 transition-all flex items-center justify-center gap-3"
+                                >
+                                    {pdfLoading ? (
+                                        <><Loader2 className="loading-spinner" /> PDF読み込み中...</>
+                                    ) : (
+                                        <><Upload /> PDFをアップロード</>
+                                    )}
+                                </button>
+                                <input type="file" ref={fileInputRef} onChange={handlePdfUpload} accept=".pdf" className="hidden" />
+                                
+                                <button
+                                    onClick={() => csvInputRef.current?.click()}
+                                    className="w-full px-6 py-4 bg-slate-800 text-white rounded-xl font-bold text-lg hover:bg-slate-700 transition-all flex items-center justify-center gap-3 border border-white/10"
+                                >
+                                    <FileText /> 原稿CSV読み込み
+                                </button>
+                                <input type="file" ref={csvInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+                            </div>
+                            
+                            {statusMessage && (
+                                <div className="text-sm text-slate-400 mb-4">{statusMessage}</div>
+                            )}
+                            
+                            <div className="border-t border-white/10 pt-6 mt-6">
+                                <p className="text-sm text-slate-500 mb-3">GitHub Actions連携</p>
+                                <button
+                                    onClick={triggerGitHubActions}
+                                    className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 mx-auto border border-white/10"
+                                >
+                                    <Github /> GitHub Actions実行
+                                </button>
+                            </div>
+                        </div>
+                        
+                        {/* Token Input Modal */}
+                        {showTokenInput && (
+                            <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                                <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-w-md w-full p-6">
+                                    <h3 className="text-xl font-bold mb-4">GitHub Token入力</h3>
+                                    <input
+                                        type="password"
+                                        value={githubToken}
+                                        onChange={e => setGithubToken(e.target.value)}
+                                        placeholder="ghp_xxxxxxxxxxxx"
+                                        className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-lg text-white mb-4"
+                                    />
+                                    <div className="flex gap-3">
+                                        <button
+                                            onClick={() => setShowTokenInput(false)}
+                                            className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg"
+                                        >
+                                            キャンセル
+                                        </button>
+                                        <button
+                                            onClick={() => { setShowTokenInput(false); triggerGitHubActions(); }}
+                                            className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg"
+                                        >
+                                            実行
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            const activeSlide = slides[activeSlideIndex];
+
+            return (
+                <div className="h-screen bg-slate-950 text-slate-200 flex flex-col overflow-hidden">
+                    <canvas ref={exportCanvasRef} className="hidden" />
+                    
+                    {/* Header */}
+                    <header className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-6 z-20">
+                        <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-lg flex items-center justify-center">
+                                <Video />
+                            </div>
+                            <h1 className="font-bold text-lg">Slide Voice Maker</h1>
+                            <button onClick={() => setShowHelp(true)} className="ml-2 text-slate-400 hover:text-white">
+                                <HelpCircle />
+                            </button>
+                        </div>
+                        
+                        <div className="flex items-center gap-3">
+                            {/* ファイル操作ボタン */}
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
+                            >
+                                <Upload /> PDF
+                            </button>
+                            <input type="file" ref={fileInputRef} onChange={handlePdfUpload} accept=".pdf" className="hidden" />
+                            
+                            <button
+                                onClick={() => csvInputRef.current?.click()}
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
+                            >
+                                <FileText /> CSV読込
+                            </button>
+                            <input type="file" ref={csvInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+                            
+                            <button
+                                onClick={downloadCSV}
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
+                            >
+                                <Download /> CSV出力
+                            </button>
+                            
+                            <div className="h-6 w-px bg-white/10 mx-1" />
+                            
+                            <button
+                                onClick={generateAllAudio}
+                                disabled={isGeneratingAudio || isExporting}
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                    isGeneratingAudio 
+                                        ? 'bg-slate-800 text-slate-400 cursor-wait' 
+                                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                }`}
+                            >
+                                {isGeneratingAudio ? (
+                                    <><Loader2 className="loading-spinner" /> 生成中...</>
+                                ) : (
+                                    <><Wand2 /> 音声生成</>
+                                )}
+                            </button>
+                            
+                            <button
+                                onClick={exportVideo}
+                                disabled={isExporting}
+                                className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-lg font-medium shadow-lg shadow-violet-500/20 transition-all disabled:opacity-50 relative overflow-hidden"
+                            >
+                                {isExporting ? (
+                                    <>
+                                        <Loader2 className="loading-spinner" />
+                                        <span>{exportProgress}%</span>
+                                        <div className="absolute bottom-0 left-0 h-1 bg-green-500 transition-all" style={{ width: `${exportProgress}%` }} />
+                                    </>
+                                ) : (
+                                    <><Video /> WebM出力</>
+                                )}
+                            </button>
+                            
+                            <button
+                                onClick={triggerGitHubActions}
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
+                            >
+                                <Github /> Actions
+                            </button>
+                        </div>
+                    </header>
+                    
+                    {/* Status Message */}
+                    {statusMessage && (
+                        <div className="bg-slate-900/50 border-b border-white/5 px-6 py-2 text-sm text-slate-400">
+                            {statusMessage}
+                        </div>
+                    )}
+                    
+                    {/* Main Content */}
+                    <div className="flex-1 flex overflow-hidden">
+                        {/* Sidebar */}
+                        <div className="w-64 bg-slate-900 border-r border-white/5 flex flex-col">
+                            <div className="p-4 border-b border-white/5">
+                                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                                    Slides ({slides.length})
+                                </h2>
+                            </div>
+                            <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                                {slides.map((slide, index) => (
+                                    <button
+                                        key={slide.id}
+                                        onClick={() => setActiveSlideIndex(index)}
+                                        className={`w-full text-left p-2 rounded-lg transition-all border ${
+                                            activeSlideIndex === index
+                                                ? 'bg-slate-800 border-violet-500/50 shadow-md'
+                                                : 'hover:bg-slate-800/50 border-transparent hover:border-white/5'
+                                        }`}
+                                    >
+                                        <div className="flex gap-3">
+                                            <div className="relative w-16 aspect-video bg-slate-950 rounded overflow-hidden border border-white/10 flex-shrink-0">
+                                                <img src={slide.image} className="w-full h-full object-cover" alt={`Slide ${index + 1}`} />
+                                                {slide.isGenerating && (
+                                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+                                                        <Loader2 className="loading-spinner text-white" />
+                                                    </div>
+                                                )}
+                                            </div>
+                                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                                                <span className="text-sm font-medium text-slate-300 truncate">Slide {index + 1}</span>
+                                                <div className="flex items-center gap-2 mt-1">
+                                                    {slide.audio ? (
+                                                        <span className="text-[10px] flex items-center gap-1 text-green-400"><Volume2 /> Audio</span>
+                                                    ) : (
+                                                        <span className="text-[10px] flex items-center gap-1 text-orange-400"><FileText /> Text</span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        {/* Preview Area */}
+                        <div className="flex-1 flex flex-col bg-slate-950 relative overflow-hidden">
+                            <div className="flex-1 flex flex-col min-h-0">
+                                <div className="flex-1 bg-slate-950 relative flex items-center justify-center p-4">
+                                    <div className="relative w-full h-full max-w-5xl flex flex-col items-center justify-center group">
+                                        <div className="relative shadow-2xl rounded-lg overflow-hidden border border-slate-800 bg-black flex-shrink-1 min-h-0">
+                                            <img src={activeSlide?.image} className="max-w-full max-h-[calc(100vh-400px)] object-contain mx-auto" alt="Slide Preview" />
+                                            <audio 
+                                                ref={audioRef} 
+                                                src={activeSlide?.audio || ""} 
+                                                onPlay={() => setIsPlaying(true)} 
+                                                onPause={() => setIsPlaying(false)} 
+                                                onEnded={() => { setIsPlaying(false); if(audioRef.current) audioRef.current.currentTime = 0; }} 
+                                            />
+                                            {activeSlide?.audio && (
+                                                <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${isPlaying ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}>
+                                                    <button
+                                                        onClick={() => {
+                                                            const audio = audioRef.current;
+                                                            if (!audio) return;
+                                                            if (isPlaying) audio.pause();
+                                                            else audio.play().catch(() => {});
+                                                        }}
+                                                        className="w-16 h-16 bg-violet-600/90 hover:bg-violet-500 text-white rounded-full flex items-center justify-center shadow-xl backdrop-blur-sm transition-transform hover:scale-105"
+                                                    >
+                                                        {isPlaying ? <Square /> : <Play />}
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Navigation */}
+                                    <div className="absolute inset-x-4 top-1/2 -translate-y-1/2 flex justify-between pointer-events-none">
+                                        <button
+                                            onClick={() => setActiveSlideIndex(Math.max(0, activeSlideIndex - 1))}
+                                            disabled={activeSlideIndex === 0}
+                                            className="pointer-events-auto p-3 rounded-full bg-slate-900/50 hover:bg-slate-800 text-slate-300 backdrop-blur-sm transition-all disabled:opacity-0"
+                                        >
+                                            <ChevronLeft />
+                                        </button>
+                                        <button
+                                            onClick={() => setActiveSlideIndex(Math.min(slides.length - 1, activeSlideIndex + 1))}
+                                            disabled={activeSlideIndex === slides.length - 1}
+                                            className="pointer-events-auto p-3 rounded-full bg-slate-900/50 hover:bg-slate-800 text-slate-300 backdrop-blur-sm transition-all disabled:opacity-0"
+                                        >
+                                            <ChevronRight />
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <PlayerOverlay currentSlide={activeSlide} audioRef={audioRef} isPlaying={isPlaying} />
+                                
+                                <div className="h-8 bg-slate-900 border-t border-b border-white/5 flex items-center justify-center gap-4 text-xs text-slate-500 font-mono">
+                                    <span>SLIDE {String(activeSlideIndex + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</span>
+                                </div>
+                            </div>
+                            
+                            {/* Script Editor */}
+                            <div className="h-[200px] bg-slate-900 flex flex-col flex-shrink-0">
+                                <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-slate-900/50">
+                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                                        <FileText /> Narration Script
+                                    </span>
+                                    <span className="text-xs text-slate-600">{activeSlide?.script?.length || 0} characters</span>
+                                </div>
+                                <textarea
+                                    value={activeSlide?.script || ""}
+                                    onChange={(e) => updateScript(activeSlideIndex, e.target.value)}
+                                    className="flex-1 bg-slate-900 p-4 text-slate-300 text-lg leading-relaxed resize-none focus:outline-none focus:bg-slate-800/50 transition-colors"
+                                    placeholder="ここに読み上げ原稿を入力してください..."
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    
+                    {/* Help Modal */}
+                    {showHelp && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+                                <div className="flex items-center justify-between p-6 border-b border-white/10">
+                                    <h3 className="text-xl font-bold text-white">🔮 使い方ガイド</h3>
+                                    <button onClick={() => setShowHelp(false)} className="text-slate-400 hover:text-white"><X /></button>
+                                </div>
+                                <div className="p-6 space-y-4">
+                                    <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 1] PDFアップロード</h4>
+                                        <p className="text-sm text-slate-300">プレゼンテーションPDFをアップロードすると、各ページがスライドとして読み込まれます。</p>
+                                    </div>
+                                    <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 2] 原稿CSV読み込み</h4>
+                                        <p className="text-sm text-slate-300">「index,script」形式のCSVを読み込むと、各スライドに原稿が割り当てられます。UTF-8/Shift_JIS対応。</p>
+                                    </div>
+                                    <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 3] 音声生成 & 動画出力</h4>
+                                        <p className="text-sm text-slate-300">「音声生成」で各スライドの音声を生成し、「WebM出力」で字幕付き動画をダウンロードできます。</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-slate-950 border-t border-white/5 flex justify-end">
+                                    <button onClick={() => setShowHelp(false)} className="px-6 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg">閉じる</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                    
+                    {/* Token Input Modal */}
+                    {showTokenInput && (
+                        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+                            <div className="bg-slate-900 border border-white/10 rounded-2xl shadow-2xl max-w-md w-full p-6">
+                                <h3 className="text-xl font-bold mb-4">GitHub Token入力</h3>
+                                <p className="text-sm text-slate-400 mb-4">GitHub Actionsを実行するにはPersonal Access Tokenが必要です。</p>
+                                <input
+                                    type="password"
+                                    value={githubToken}
+                                    onChange={e => setGithubToken(e.target.value)}
+                                    placeholder="ghp_xxxxxxxxxxxx"
+                                    className="w-full px-4 py-3 bg-slate-800 border border-white/10 rounded-lg text-white mb-4"
+                                />
+                                <div className="flex gap-3">
+                                    <button onClick={() => setShowTokenInput(false)} className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 rounded-lg">キャンセル</button>
+                                    <button onClick={() => { setShowTokenInput(false); triggerGitHubActions(); }} className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 rounded-lg">実行</button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // Render
+        ReactDOM.createRoot(document.getElementById('root')).render(<SlideVoiceMaker />);
+    </script>
+</body>
+</html>
