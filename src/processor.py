@@ -2,6 +2,7 @@ import os
 import subprocess
 import wave
 import contextlib
+import shutil
 from dataclasses import dataclass
 from typing import List, Optional
 
@@ -24,6 +25,29 @@ class _SlideItem:
     audio_path: str
     script_text: str
     duration: float
+
+
+def clear_temp_folder(temp_dir: str) -> bool:
+    """tempフォルダを削除して再作成（上書き更新）。
+
+    Returns:
+        bool: 成功した場合True、エラーが発生した場合False
+    """
+    try:
+        if os.path.exists(temp_dir):
+            shutil.rmtree(temp_dir)
+            print(f"Cleared temp folder: {temp_dir}")
+        os.makedirs(temp_dir, exist_ok=True)
+        return True
+    except PermissionError as e:
+        print(f"Warning: Could not clear temp folder (file locked): {e}")
+        # ロックされていても続行
+        os.makedirs(temp_dir, exist_ok=True)
+        return False
+    except Exception as e:
+        print(f"Warning: Error clearing temp folder: {e}")
+        os.makedirs(temp_dir, exist_ok=True)
+        return False
 
 
 def _get_render_scale() -> float:

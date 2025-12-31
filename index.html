@@ -209,6 +209,19 @@
             const [statusMessage, setStatusMessage] = useState('');
             const [githubToken, setGithubToken] = useState('');
             const [showTokenInput, setShowTokenInput] = useState(false);
+            const [selectedResolution, setSelectedResolution] = useState('720p');
+            
+            // 解像度マッピング
+            const RESOLUTION_OPTIONS = [
+                { label: '720p (1280x720)', value: '720p', width: 1280, height: 720 },
+                { label: '1080p (1920x1080)', value: '1080p', width: 1920, height: 1080 },
+                { label: '1440p (2560x1440)', value: '1440p', width: 2560, height: 1440 },
+            ];
+            
+            const getResolutionDimensions = () => {
+                const res = RESOLUTION_OPTIONS.find(r => r.value === selectedResolution);
+                return res || RESOLUTION_OPTIONS[0];
+            };
             
             const audioRef = useRef(null);
             const exportCanvasRef = useRef(null);
@@ -238,7 +251,7 @@
                 return images;
             };
 
-            // CSV Parser (文字化け対処)
+            // CSV Parser (文字化け対処・マルチライン対応)
             const parseCSV = async (file) => {
                 const encodings = ['utf-8', 'shift_jis', 'euc-jp', 'iso-2022-jp'];
                 for (const encoding of encodings) {
@@ -252,35 +265,72 @@
                         
                         // Check if readable (no replacement characters)
                         if (!text.includes('�')) {
-                            const lines = text.trim().split('\n');
-                            const header = lines[0].split(',');
-                            const scriptIndex = header.findIndex(h => h.trim().toLowerCase() === 'script');
-                            const indexCol = header.findIndex(h => h.trim().toLowerCase() === 'index');
-                            
-                            if (scriptIndex === -1) continue;
-                            
+                            // RFC 4180準拠のCSVパース
                             const scripts = [];
-                            let currentScript = '';
+                            let current = '';
+                            let inQuotes = false;
                             let currentIndex = null;
+                            let currentScript = '';
+                            let isFirstLine = true;
                             
-                            for (let i = 1; i < lines.length; i++) {
-                                const line = lines[i];
-                                // Simple CSV parsing with quote handling
-                                const match = line.match(/^(\d+),["']?(.*)["']?$/);
-                                if (match) {
-                                    if (currentIndex !== null) {
-                                        scripts.push({ index: currentIndex, script: currentScript.replace(/^["']|["']$/g, '') });
+                            for (let i = 0; i < text.length; i++) {
+                                const char = text[i];
+                                const nextChar = text[i + 1];
+                                
+                                if (char === '"') {
+                                    if (inQuotes && nextChar === '"') {
+                                        current += '"';
+                                        i++; // Skip escaped quote
+                                    } else {
+                                        inQuotes = !inQuotes;
                                     }
-                                    currentIndex = parseInt(match[1]);
-                                    currentScript = match[2];
-                                } else if (currentIndex !== null) {
-                                    currentScript += '\n' + line;
+                                } else if ((char === '\n' || char === '\r') && !inQuotes) {
+                                    // End of line
+                                    if (char === '\r' && nextChar === '\n') i++; // Skip CRLF
+                                    
+                                    if (isFirstLine) {
+                                        isFirstLine = false;
+                                        current = '';
+                                        continue;
+                                    }
+                                    
+                                    // Parse the line
+                                    const commaIndex = current.indexOf(',');
+                                    if (commaIndex !== -1) {
+                                        const idx = parseInt(current.substring(0, commaIndex));
+                                        let script = current.substring(commaIndex + 1);
+                                        // Remove surrounding quotes if present
+                                        if (script.startsWith('"') && script.endsWith('"')) {
+                                            script = script.slice(1, -1);
+                                        }
+                                        if (!isNaN(idx)) {
+                                            scripts.push({ index: idx, script: script.trim() });
+                                        }
+                                    }
+                                    current = '';
+                                } else {
+                                    current += char;
                                 }
                             }
-                            if (currentIndex !== null) {
-                                scripts.push({ index: currentIndex, script: currentScript.replace(/^["']|["']$/g, '') });
+                            
+                            // Handle last line
+                            if (current.trim()) {
+                                const commaIndex = current.indexOf(',');
+                                if (commaIndex !== -1) {
+                                    const idx = parseInt(current.substring(0, commaIndex));
+                                    let script = current.substring(commaIndex + 1);
+                                    if (script.startsWith('"') && script.endsWith('"')) {
+                                        script = script.slice(1, -1);
+                                    }
+                                    if (!isNaN(idx)) {
+                                        scripts.push({ index: idx, script: script.trim() });
+                                    }
+                                }
                             }
-                            return scripts;
+                            
+                            if (scripts.length > 0) {
+                                return scripts;
+                            }
                         }
                     } catch (e) {
                         continue;
@@ -413,8 +463,9 @@
                 setStatusMessage('動画生成開始...');
 
                 const canvas = exportCanvasRef.current;
-                canvas.width = 1920;
-                canvas.height = 1080;
+                const dims = getResolutionDimensions();
+                canvas.width = dims.width;
+                canvas.height = dims.height;
                 const ctx = canvas.getContext('2d');
 
                 try {
@@ -582,7 +633,7 @@
                                 PDFスライドと原稿CSVから<br/>ナレーション付き動画を生成
                             </p>
                             
-                            {/* ファイル入力ボタン群 */}
+                            {/* ファイル入力ボタン */}
                             <div className="space-y-4 mb-8">
                                 <button
                                     onClick={() => fileInputRef.current?.click()}
@@ -601,24 +652,30 @@
                                     onClick={() => csvInputRef.current?.click()}
                                     className="w-full px-6 py-4 bg-slate-800 text-white rounded-xl font-bold text-lg hover:bg-slate-700 transition-all flex items-center justify-center gap-3 border border-white/10"
                                 >
-                                    <FileText /> 原稿CSV読み込み
+                                    <FileText /> 原稿CSVを読み込み
                                 </button>
                                 <input type="file" ref={csvInputRef} onChange={handleCsvUpload} accept=".csv" className="hidden" />
+                                
+                                <div className="flex gap-3">
+                                    <button
+                                        onClick={downloadCSV}
+                                        disabled={slides.length === 0}
+                                        className="flex-1 px-4 py-3 bg-slate-800/50 text-slate-300 rounded-xl font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2 border border-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <Download /> CSV出力
+                                    </button>
+                                    <button
+                                        onClick={triggerGitHubActions}
+                                        className="flex-1 px-4 py-3 bg-slate-800/50 text-slate-300 rounded-xl font-medium hover:bg-slate-700 transition-all flex items-center justify-center gap-2 border border-white/10"
+                                    >
+                                        <Github /> Actions実行
+                                    </button>
+                                </div>
                             </div>
                             
                             {statusMessage && (
                                 <div className="text-sm text-slate-400 mb-4">{statusMessage}</div>
                             )}
-                            
-                            <div className="border-t border-white/10 pt-6 mt-6">
-                                <p className="text-sm text-slate-500 mb-3">GitHub Actions連携</p>
-                                <button
-                                    onClick={triggerGitHubActions}
-                                    className="px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-lg font-medium flex items-center justify-center gap-2 mx-auto border border-white/10"
-                                >
-                                    <Github /> GitHub Actions実行
-                                </button>
-                            </div>
                         </div>
                         
                         {/* Token Input Modal */}
@@ -697,6 +754,13 @@
                                 <Download /> CSV出力
                             </button>
                             
+                            <button
+                                onClick={triggerGitHubActions}
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
+                            >
+                                <Github /> Actions
+                            </button>
+                            
                             <div className="h-6 w-px bg-white/10 mx-1" />
                             
                             <button
@@ -715,6 +779,16 @@
                                 )}
                             </button>
                             
+                            <select
+                                value={selectedResolution}
+                                onChange={(e) => setSelectedResolution(e.target.value)}
+                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10 cursor-pointer"
+                            >
+                                {RESOLUTION_OPTIONS.map(opt => (
+                                    <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                            </select>
+                            
                             <button
                                 onClick={exportVideo}
                                 disabled={isExporting}
@@ -729,13 +803,6 @@
                                 ) : (
                                     <><Video /> WebM出力</>
                                 )}
-                            </button>
-                            
-                            <button
-                                onClick={triggerGitHubActions}
-                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
-                            >
-                                <Github /> Actions
                             </button>
                         </div>
                     </header>
