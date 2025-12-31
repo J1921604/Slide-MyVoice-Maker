@@ -2,11 +2,30 @@
 
 PDFスライドと原稿CSVから、AI音声ナレーション付き動画（WebM）を自動生成するツールです。
 
+**バージョン**: 1.0.0  
+**日付**: 2026-01-05
+
 ## 🌐 GitHub Pages
 
 **Web版**: https://j1921604.github.io/Slide-Voice-Maker/
 
 ブラウザ上でPDFと原稿CSVをアップロードし、動画を生成できます。
+
+## 📦 機能概要
+
+### ローカル版（src/server.py起動時）
+
+- **PDF入力**: inputフォルダにPDFファイルを上書き保存
+- **原稿CSV入力**: inputフォルダにCSVファイルを上書き保存
+- **解像度選択**: 720p/1080p/1440pから選択
+- **音声生成**: Edge TTSで実際のAI音声を生成、output/tempに上書き更新、output/に動画webm出力
+- **動画ダウンロード**: outputフォルダから選択したwebmをダウンロード
+
+### Web版（GitHub Pages）
+
+- 静的ホスティングで完結（外部APIキー不要）
+- 「音声生成」はGitHub Actions（generate-video.yml）で実際のAI音声（Edge TTS）を生成
+- リポジトリのinput/にPDF/CSVを配置してActionsを手動実行
 
 ## 🚀 クイックスタート
 
@@ -107,11 +126,31 @@ index,script
 
 `main`ブランチへのpush時に自動的に：
 1. GitHub Pagesにindex.htmlをデプロイ
-2. input/フォルダ内のPDF変更時に動画を自動生成
+2. input/フォルダ内のPDF/CSV変更時に動画を生成し、Artifactsとしてアップロード（リポジトリへコミットはしない）
 
 ### 手動実行
 
 GitHubリポジトリの「Actions」タブから「Generate Video from PDF」ワークフローを手動実行できます。
+
+> NOTE: 生成物（`output/*.webm` など）は `.gitignore` 対象です。必要な場合はArtifactsから取得してください。
+
+## ✅ テスト
+
+ローカルでE2E（CLI + Web）を実行できます。
+
+```bash
+# CLI E2E（解像度/非空WebM）
+py -3.10 -m pytest -m e2e -k resolution
+
+# Web E2E（PDF/CSV→音声生成→WebM出力が非空）
+py -3.10 -m pytest -m e2e -k web_export
+```
+
+Playwrightのブラウザが未導入の場合は、事前にインストールしてください。
+
+```bash
+py -3.10 -m playwright install chromium
+```
 
 ## 🎬 使い方
 

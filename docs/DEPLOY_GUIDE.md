@@ -7,6 +7,15 @@
 
 Slide Voice MakerをGitHub Pagesにデプロイする手順（自動・手動）を説明します。
 
+## Web版機能
+
+GitHub Pagesは静的ホスティングのため、以下の設計で完結します：
+
+- **外部APIキー不要**
+- **音声生成**: GitHub Actions（generate-video.yml）でEdge TTS実行
+- **入力方法**: リポジトリのinput/にPDF/CSVを配置してActionsを手動実行
+- **生成物**: Artifactsとしてダウンロード可能（リポジトリへのコミットはしない）
+
 ## デプロイフロー
 
 ```mermaid
@@ -159,7 +168,8 @@ flowchart LR
 
 1. **権限エラー**
    - Settings → Actions → General → Workflow permissions
-   - 「Read and write permissions」を選択
+  - 基本は「Read repository contents permission」で動作します（Pagesデプロイは `pages:write` を使用）
+  - リポジトリへファイルを書き戻す運用（本プロジェクトでは非推奨）にする場合のみ書き込み権限が必要です
 
 2. **Pages未設定**
    - Settings → Pages → Source: GitHub Actions
@@ -183,6 +193,8 @@ flowchart LR
 ## 動画生成ワークフロー
 
 PDF変更時に動画を自動生成する別ワークフローも用意されています。
+
+> NOTE: 生成物（`output/*.webm` など）はリポジトリへコミットしません。成果物はArtifactsからダウンロードしてください。
 
 `.github/workflows/generate-video.yml`:
 

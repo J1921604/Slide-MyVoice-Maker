@@ -165,6 +165,6 @@ py -3.10 src\main.py 2>&1 | tee log.txt
 
 ## 次のステップ
 
-- [機能仕様書](spec.md)を確認
-- [実装計画](plan.md)を確認
-- [タスク一覧](tasks.md)で進捗確認
+- [機能仕様書](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/spec.md)を確認
+- [実装計画](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/plan.md)を確認
+- [タスク一覧](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/tasks.md)で進捗確認

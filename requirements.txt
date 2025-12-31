@@ -3,3 +3,8 @@ moviepy<2.0
 pymupdf
 pandas
 imageio-ffmpeg
+fastapi
+uvicorn
+python-multipart
+pytest
+playwright

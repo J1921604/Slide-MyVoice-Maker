@@ -15,6 +15,25 @@ Slide Voice Makerは、PDFスライドと原稿CSVからAI音声ナレーショ�
 2. **temp上書き更新**: 毎回の実行時にoutput/tempフォルダを上書き更新し、古いファイルを自動削除する
 3. **GitHub Pages対応**: Web版でも同等の機能を提供する
 
+加えて、運用上の必須要件として以下を定義する:
+
+- **ローカル版（src/server.py起動時）**:
+  - PDF入力ボタン実行で、inputフォルダにPDFファイルを上書き保存
+  - 原稿CSV入力ボタン実行で、inputフォルダにCSVファイルを上書き保存
+  - webm解像度プルダウン選択（720p/1080p/1440p）
+  - 音声生成ボタン実行で、output/tempフォルダに上書き更新、output/に動画webm上書き更新
+  - 動画webm出力ボタン実行で、outputフォルダに保存した動画webmを選択してダウンロード
+
+- **Web版（GitHub Pages）**:
+  - 静的ホスティングで完結するため、外部APIキー不要で設計
+  - 「音声生成」は推定尺の無音音声ではなく、GitHub Actions（generate-video.yml）実行で実際のAI音声（Edge TTS）を生成
+  - リポジトリのinput/にPDF/CSVを置いてGitHub Actionsを実行
+
+- **ホーム画面（PDF未アップロード時）はPDF入力ボタンのみ表示**
+- **PDFアップロード後の画面では原稿CSV入力ボタンを維持**（文字化け対処のため）
+- **CSV出力ボタン / GitHub Actions実行ボタンはWeb UIに表示しない**
+- GitHub Pages環境でも **WebMが空にならず再生可能**であること（MediaRecorder空chunk対策）
+
 ## プロセスフロー
 
 ```mermaid
@@ -24,7 +43,7 @@ flowchart TD
     B -->|NG| Z[エラー表示]
     C --> D[tempフォルダ<br>上書きクリア]
     D --> E[PDF→画像変換]
-    E --> F[音声生成<br>Edge TTS]
+    E --> F[音声生成<br>Python: Edge TTS / Web: 無音生成(推定尺)]
     F --> G[動画エンコード<br>選択解像度で出力]
     G --> H[output/に<br>動画保存]
     H --> I[完了]
@@ -42,15 +61,18 @@ flowchart TB
         RES[解像度選択]
     end
 
-    subgraph Python版
+    subgraph Python版/ローカル
         MAIN[src/main.py]
         PROC[src/processor.py]
+        SERVER[src/server.py]
+        TTS[Edge TTS]
     end
 
-    subgraph Web版
+    subgraph Web版/GitHub Pages
         HTML[index.html]
         PDFJS[PDF.js]
-        EDGETTSAPI[Edge TTS API]
+        CSVDEC[CSVデコード<br/>TextDecoder]
+        REC[MediaRecorder<br/>canvas.captureStream]
     end
 
     subgraph 出力
@@ -62,6 +84,7 @@ flowchart TB
     CSV --> MAIN
     RES --> MAIN
     MAIN --> PROC
+    PROC --> TTS
     PROC --> TEMP
     PROC --> WEBM
 
@@ -69,11 +92,10 @@ flowchart TB
     CSV --> HTML
     RES --> HTML
     HTML --> PDFJS
-    HTML --> EDGETTSAPI
-    HTML --> WEBM
+    HTML --> CSVDEC
+    HTML --> REC
+    REC --> WEBM
 ```
-
-## ユーザーシナリオとテスト
 
 ### ユーザーストーリー1 - 出力解像度の選択（優先度: P1）
 
@@ -193,8 +215,9 @@ erDiagram
 |----|------|----------|
 | SC-001 | 解像度選択から動画生成完了まで、スライド1枚あたり10秒以内 | 処理時間計測 |
 | SC-002 | temp上書きによりディスク使用量が前回生成分のみに制限される | ファイルサイズ確認 |
-| SC-003 | 選択した解像度と出力動画の実解像度が100%一致する | FFprobeで検証 |
-| SC-004 | GitHub Pages版でも解像度選択が正常に動作する | ブラウザテスト |
+| SC-003 | 選択した解像度と出力動画の実解像度が100%一致する | FFmpegログ解析で検証 |
+| SC-004 | GitHub Pages版でも解像度選択が正常に動作する | Web E2Eテスト |
+| SC-005 | GitHub Pages版で生成/ダウンロードしたWebMが空でない | Web E2Eテスト |
 
 ## 技術スタック
 
@@ -205,7 +228,7 @@ erDiagram
 | 動画編集 | MoviePy < 2.0 |
 | PDF処理 | PyMuPDF (fitz) |
 | 動画エンコード | FFmpeg (VP8/VP9) |
-| Web版 | React 18 + Tailwind CSS + PDF.js |
+| Web版 | React 18 + Tailwind CSS + PDF.js + MediaRecorder |
 | デプロイ | GitHub Pages |
 
 ## 依存関係
@@ -216,4 +239,6 @@ moviepy<2.0
 pymupdf
 pandas
 imageio-ffmpeg
+pytest
+playwright
 ```

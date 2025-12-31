@@ -143,6 +143,11 @@ flowchart TD
 - 正常に動作するまで繰り返し検証しエラー修正を完了する
 - 簡略化による品質低下は許容しない
 
+**必須のE2E**:
+
+- CLI: `py -3.10 src\main.py` を起点に、PDF→WebM生成が成功すること
+- Web: `index.html` で PDF/原稿CSV→音声生成→WebM出力が **空ファイルにならない**こと
+
 ### レビュー要件
 
 - 重大変更にはレビュー承認を必須とする
@@ -247,4 +252,43 @@ flowchart LR
 - 複雑さの導入は正当化を文書化する
 - 開発ガイダンスは `.specify/templates/` を参照する
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-31 | **Last Amended**: 2025-12-31
+## プロダクト機能仕様
+
+### ローカル版機能
+
+PDFとCSVをinput/フォルダに保存し、Edge TTSで実際のAI音声を生成する。
+
+```mermaid
+flowchart TD
+    A[index.html ホーム画面] --> B[PDF入力ボタン]
+    B --> C[input/にPDF上書き保存]
+    C --> D[PDFアップロード後画面]
+    D --> E[原稿CSV入力ボタン]
+    E --> F[input/原稿.csv上書き保存]
+    D --> G[解像度プルダウン選択]
+    G --> H[音声生成ボタン]
+    H --> I[output/temp上書き更新]
+    I --> J[output/*.webm生成]
+    J --> K[動画WebM出力ボタン]
+    K --> L[選択したwebmダウンロード]
+```
+
+### Web版機能（GitHub Pages）
+
+静的ホスティングで完結するため、外部APIキー不要で設計する。
+
+- **音声生成**: GitHub Actions（generate-video.yml）でEdge TTS実行
+- **リポジトリのinputフォルダ**: PDF/CSVを配置してActionsを手動実行
+
+```mermaid
+flowchart TD
+    A[GitHub Pages index.html] --> B[PDF/CSVアップロード]
+    B --> C[ブラウザでプレビュー]
+    C --> D[音声生成ボタン]
+    D --> E[GitHub Actions へ誘導]
+    E --> F[generate-video.yml実行]
+    F --> G[Edge TTS音声生成]
+    G --> H[Artifacts出力]
+```
+
+**Version**: 1.0.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-05

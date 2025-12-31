@@ -2,7 +2,7 @@
 
 **入力**: `/specs/001-Slide-Voice-Maker/` からの設計ドキュメント
 **前提条件**: plan.md（必須）、spec.md（必須）、data-model.md、contracts/
-**バージョン**: 1.1.0
+**バージョン**: 1.0.0
 **開始日**: 2026-01-05
 
 ## 形式: `[ID] [P?] [ストーリー?] 説明`
@@ -21,25 +21,29 @@ gantt
     title 実装スケジュール
     dateFormat YYYY-MM-DD
     axisFormat %m/%d
-    excludes weekends
+    excludes weekends, 2025-12-27, 2025-12-28, 2025-12-29, 2025-12-30, 2025-12-31, 2026-01-01, 2026-01-02, 2026-01-03, 2026-01-04
 
-    section Phase 1 セットアップ
-    T001-T003 プロジェクト準備           :done, p1, 2026-01-05, 1d
+    section Phase 1 Setup
+    T001-T003 プロジェクト準備                :done, p1, 2026-01-05, 1d
 
-    section Phase 2 基盤実装
-    T004-T006 基盤実装                   :done, p2, after p1, 1d
+    section Phase 2 Foundational
+    T004-T006 CLI基盤（解像度/env）            :done, p2, after p1, 1d
 
-    section Phase 3 解像度選択 US1
-    T007-T012 解像度選択機能             :done, p3, after p2, 2d
+    section Phase 3 CLI Features
+    T007-T016 解像度選択 + temp上書き           :done, p3, after p2, 2d
 
-    section Phase 4 temp上書き US2
-    T013-T016 temp上書き機能             :done, p4, after p3, 1d
+    section Phase 4 Web Core
+    T017-T020 Web UI要件（PDF前/後の表示制御） :done, p4, after p3, 1d
+    T021 WebM空ファイル対策（MediaRecorder）    :done, p5, after p4, 1d
+    T022 CSV文字化け対策（TextDecoder）         :done, p6, after p5, 1d
 
-    section Phase 5 Web版対応 US3
-    T017-T020 Web版対応                  :done, p5, after p4, 2d
+    section Phase 5 Tests/CI
+    T023 CLI E2E（解像度・非空WebM）            :done, p7, after p6, 1d
+    T024 Web E2E（PDF/CSV→音声→WebM）           :done, p8, after p7, 1d
+    T025 CI整備（生成物非コミット化）            :done, p9, after p8, 1d
 
-    section Phase 6 仕上げ
-    T021-T025 テスト検証・ドキュメント   :active, p6, after p5, 1d
+    section Phase 6 Docs
+    T026-T030 ドキュメント整合                  :done, p10, after p9, 1d
 ```
 
 ---
@@ -112,12 +116,19 @@ gantt
 
 **独立テスト**: index.htmlで解像度ドロップダウンから1440pを選択し、動画エクスポートで2560x1440のWebMがダウンロードされることを確認
 
-### ユーザーストーリー3の実装
+### ユーザーストーリー3の実装（Web版コア）
 
 - [x] T017 [US3] index.htmlにRESOLUTION_OPTIONS配列を定義（label, value, width, height）
 - [x] T018 [US3] index.htmlにselectedResolution React stateを追加（デフォルト: '720p'）
 - [x] T019 [US3] index.htmlに解像度選択ドロップダウンUIを追加（Tailwind CSS）
 - [x] T020 [US3] exportVideo()関数でgetResolutionDimensions()を呼び出しcanvasサイズを動的設定
+
+### 重要タスク（Web UI/不具合修正）
+
+- [x] T021 index.htmlのPDFアップロード前ホーム画面を「PDF入力ボタンのみ」にする（CSV入力/出力、Actionsを表示しない）
+- [x] T022 PDFアップロード後の画面では「原稿CSV入力ボタン」を維持し、CSV出力/Actionsは表示しない
+- [x] T023 GitHub PagesでWebMが空になる問題を回避（録画用canvasをdisplay:noneにしない、初回描画後に録画開始）
+- [x] T024 CSV文字化け対処をTextDecoderベースに強化（UTF-8/Shift_JIS等 + RFC4180最小対応）
 
 **チェックポイント**: Web版解像度選択が独立して動作 ✅
 
@@ -127,11 +138,12 @@ gantt
 
 **目的**: E2Eテスト実行、ドキュメント更新、最終検証
 
-- [x] T021 [P] README.mdに解像度オプションのドキュメントを追加
-- [x] T022 [P] specs/001-Slide-Voice-Maker/quickstart.mdを更新
-- [x] T023 ローカルE2Eテスト実行（py -3.10 src/main.py --resolution 1080p）
-- [x] T024 GitHub Pages動作確認（https://j1921604.github.io/Slide-Voice-Maker/）
-- [x] T025 mainブランチへのマージとブランチ削除
+- [x] T025 [P] .github/workflows/generate-video.ymlを「生成物をコミットしない」方針へ更新
+- [x] T026 [P] README.mdをWeb UI要件/テスト/実行手順に整合
+- [x] T027 [P] docs/DEPLOY_GUIDE.mdを現行ワークフローに整合
+- [x] T028 [P] docs/完全仕様書.mdを現行仕様（Web UI/テスト/生成物方針）に整合
+- [x] T029 [P] specs/001-Slide-Voice-Maker/{spec,plan,quickstart}.mdを整合（リンクはGitHub URLへ）
+- [x] T030 ローカルE2E（CLI/Web）を実行し100%成功を確認
 
 **チェックポイント**: 全機能テスト・ドキュメント完了
 
@@ -213,13 +225,13 @@ flowchart TD
 
 ```mermaid
 pie title タスク進捗状況
-    "完了" : 25
+    "完了" : 30
 ```
 
 | 項目 | 数値 |
 |------|------|
-| 総タスク数 | 25 |
-| 完了 | 25 |
+| 総タスク数 | 30 |
+| 完了 | 30 |
 | 未着手 | 0 |
 
 ---

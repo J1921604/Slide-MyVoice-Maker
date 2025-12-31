@@ -14,9 +14,7 @@ on:
       - 'input/*.csv'
 
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
 
 jobs:
   generate-video:
@@ -65,31 +63,3 @@ jobs:
         name: generated-videos
         path: output/*.webm
         retention-days: 30
-    
-    - name: Commit output to repository
-      run: |
-        git config --local user.email "action@github.com"
-        git config --local user.name "GitHub Action"
-        git add output/*.webm || true
-        git diff --staged --quiet || git commit -m "Auto-generated videos [skip ci]"
-        git push || true
-
-  deploy-pages:
-    needs: generate-video
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-    
-    - name: Setup Pages
-      uses: actions/configure-pages@v4
-    
-    - name: Upload artifact
-      uses: actions/upload-pages-artifact@v3
-      with:
-        path: '.'
-    
-    - name: Deploy to GitHub Pages
-      id: deployment
-      uses: actions/deploy-pages@v4
