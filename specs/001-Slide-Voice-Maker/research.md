@@ -57,7 +57,7 @@ except PermissionError:
 
 ---
 
-### 3. Web版解像度選択の実装方式
+### 3. UI解像度選択の実装方式
 
 **決定**: React state + select要素
 
@@ -128,7 +128,7 @@ const RESOLUTION_OPTIONS = [
 | pandas | 最新 | CSV読み込み |
 | imageio-ffmpeg | 最新 | FFmpegラッパー |
 
-### Web版
+### Web UI
 
 | 項目 | バージョン | 役割 |
 |------|-----------|------|

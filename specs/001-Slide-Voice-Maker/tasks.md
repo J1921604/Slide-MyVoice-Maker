@@ -127,8 +127,8 @@ gantt
 
 - [x] T019 [P] tests/e2e/test_resolution.pyでCLI E2Eテスト（解像度・非空WebM確認）
 - [x] T020 [P] tests/e2e/test_local_backend.pyでローカルバックエンドE2Eテスト
-- [x] T021 [P] README.mdをローカル版要件/テスト/実行手順に整合
-- [x] T022 [P] docs/完全仕様書.mdを現行仕様（ローカル版のみ）に整合
+- [x] T021 [P] README.mdを要件/テスト/実行手順に整合
+- [x] T022 [P] docs/完全仕様書.mdを現行仕様に整合
 - [x] T023 [P] specs/001-Slide-Voice-Maker/{spec,plan,quickstart}.mdを整合（リンクはGitHub URLへ）
 - [x] T024 ローカルE2Eを実行し100%成功を確認
 
@@ -145,7 +145,7 @@ flowchart TD
     P1[Phase 1<br>セットアップ] --> P2[Phase 2<br>基盤]
     P2 --> P3[Phase 3<br>US1 解像度選択]
     P2 --> P4[Phase 4<br>US2 temp上書き]
-    P3 --> P5[Phase 5<br>ローカルWeb UI]
+    P3 --> P5[Phase 5<br>Web UI]
     P4 --> P5
     P5 --> P6[Phase 6<br>仕上げ]
 ```

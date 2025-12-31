@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 from pathlib import Path
 from typing import Literal, Optional
 
@@ -8,6 +9,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+# srcフォルダをパスに追加（相対インポート対応）
+sys.path.insert(0, str(Path(__file__).parent))
 from processor import clear_temp_folder, process_pdf_and_script
 
 

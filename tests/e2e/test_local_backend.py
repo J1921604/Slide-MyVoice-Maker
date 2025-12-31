@@ -93,7 +93,7 @@ def test_local_backend_generates_and_downloads_webm(tmp_path: Path) -> None:
             page = context.new_page()
             page.goto(f"http://{host}:{port}/index.html", wait_until="domcontentloaded")
 
-            # PDFアップロード（ローカルはinput/へ保存される）
+            # PDFアップロード（input/へ保存される）
             with page.expect_file_chooser() as fc_pdf:
                 page.get_by_role("button", name="PDFをアップロード").click()
             fc_pdf.value.set_files(str(pdf_path))
@@ -103,12 +103,12 @@ def test_local_backend_generates_and_downloads_webm(tmp_path: Path) -> None:
 
             # CSVアップロード
             with page.expect_file_chooser() as fc_csv:
-                page.get_by_role("button", name="原稿CSV").click()
+                page.get_by_role("button", name="原稿CSV入力").click()
             fc_csv.value.set_files(str(csv_path))
 
-            # ローカル生成（output/に保存される）
+            # 生成（output/に保存される）
             page.get_by_role("button", name="音声生成").click()
-            page.get_by_text("生成完了（ローカル）").wait_for(timeout=300000)
+            page.get_by_text("生成完了").wait_for(timeout=300000)
 
             # output選択とダウンロード
             page.get_by_role("button", name="動画WebM出力").wait_for(timeout=15000)

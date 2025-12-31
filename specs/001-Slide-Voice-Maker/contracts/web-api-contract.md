@@ -1,11 +1,11 @@
 # Web API契約: Slide Voice Maker
 
 **日付**: 2026-01-05
-**対象**: index.html（GitHub Pages）
+**対象**: index.html（サーバー連携）
 
 ## 概要
 
-Web版はクライアントサイドで動作し、サーバーAPIは使用しない。以下はJavaScript内部のインターフェース定義である。
+Web UIはFastAPIサーバー（src/server.py）と連携して動作する。以下はJavaScript内部のインターフェースとサーバーAPIの定義である。
 
 ## 解像度設定インターフェース
 

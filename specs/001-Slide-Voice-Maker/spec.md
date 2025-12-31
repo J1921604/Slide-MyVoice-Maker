@@ -16,7 +16,7 @@ Slide Voice Makerは、PDFスライドと原稿CSVからAI音声ナレーショ�
 
 加えて、運用上の必須要件として以下を定義する:
 
-- **ローカル版（src/server.py起動時）**:
+- **機能（src/server.py起動時）**:
   - PDF入力ボタン実行で、inputフォルダにPDFファイルを上書き保存
   - 原稿CSV入力ボタン実行で、inputフォルダにCSVファイルを上書き保存
   - webm解像度プルダウン選択（720p/1080p/1440p）
@@ -35,7 +35,7 @@ flowchart TD
     B -->|NG| Z[エラー表示]
     C --> D[tempフォルダ<br>上書きクリア]
     D --> E[PDF→画像変換]
-    E --> F[音声生成<br>Python: Edge TTS / Web: 無音生成(推定尺)]
+    E --> F[音声生成<br>Edge TTS]
     F --> G[動画エンコード<br>選択解像度で出力]
     G --> H[output/に<br>動画保存]
     H --> I[完了]

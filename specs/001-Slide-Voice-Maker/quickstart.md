@@ -121,9 +121,18 @@ index,script
 | 1080p | 1920×1080 | プレゼンテーション、標準品質 |
 | 1440p | 2560×1440 | 高品質、大画面表示 |
 
-## Web版（GitHub Pages）
+## Web UI
 
-**URL**: https://j1921604.github.io/Slide-Voice-Maker/
+**起動方法**:
+```bash
+# ワンクリック起動
+start.bat
+
+# または手動起動
+py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
+```
+
+**URL**: http://127.0.0.1:8000
 
 ### 使用手順
 

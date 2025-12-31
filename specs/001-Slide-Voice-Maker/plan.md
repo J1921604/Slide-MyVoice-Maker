@@ -13,20 +13,20 @@
 
 加えて、運用上の要件として以下も満たす:
 
-- **ローカル版**: PDFアップロードでinput/に保存、原稿CSV入力でinput/原稿.csv上書き、音声生成でEdge TTS実行、output/にwebm出力
-- **Web UIはローカルサーバー連携のみ**
+- PDFアップロードでinput/に保存、原稿CSV入力でinput/原稿.csv上書き、音声生成でEdge TTS実行、output/にwebm出力
+- **Web UIはサーバー連携のみ**
 - **Web UIホーム画面はPDFアップロードのみ**（CSV出力等は表示しない）
 - **PDFアップロード後の画面では原稿CSV入力を維持**（文字化け対処のため）
-- 変更内容を **E2Eテストへ反映**し、ローカルで検証可能にする
+- 変更内容を **E2Eテストへ反映**し、検証可能にする
 
 ## 技術コンテキスト
 
 **言語/バージョン**: Python 3.10.11
 **主要依存関係**: edge-tts, moviepy<2.0, pymupdf, pandas, imageio-ffmpeg, fastapi, uvicorn
-**ストレージ**: ローカルファイルシステム（output/, output/temp/）
+**ストレージ**: ファイルシステム（output/, output/temp/）
 **テスト**: 手動テスト + E2Eスクリプト
-**ターゲットプラットフォーム**: Windows（ローカル）
-**プロジェクト種別**: single（Python CLI + ローカルWeb UI）
+**ターゲットプラットフォーム**: Windows
+**プロジェクト種別**: single（Python CLI + Web UI）
 **パフォーマンス目標**: スライド1枚あたり10秒以内で動画生成
 **制約**: UTF-8エンコーディング必須、メモリ使用量はPDFサイズの5倍以内
 **規模/スコープ**: 個人/小規模チーム向け、1～100ページのPDF対応
@@ -66,9 +66,10 @@ specs/001-Slide-Voice-Maker/
 
 ```text
 Slide-Voice-Maker/
-├── index.html           # ローカルWeb UI（サーバー連携）
+├── index.html           # Web UI（サーバー連携）
+├── start.bat            # ワンクリック起動スクリプト
 ├── requirements.txt     # Python依存パッケージ
-├── preview.bat          # ローカルプレビュー起動
+├── preview.bat          # プレビュー起動
 ├── input/
 │   ├── *.pdf            # 入力PDFファイル
 │   └── 原稿.csv         # ナレーション原稿
@@ -78,11 +79,11 @@ Slide-Voice-Maker/
 ├── src/
 │   ├── main.py          # CLIエントリポイント
 │   ├── processor.py     # PDF処理・動画生成
-│   └── server.py        # FastAPIローカルサーバー
+│   └── server.py        # FastAPIサーバー
 └── tests/
     └── e2e/
         ├── test_resolution.py      # CLI解像度E2Eテスト
-        └── test_local_backend.py   # ローカルバックエンドE2Eテスト
+        └── test_local_backend.py   # バックエンドE2Eテスト
 
 pytest.ini               # pytest設定（markers等）
 ```
@@ -200,7 +201,7 @@ stateDiagram-v2
 |------|------|------|
 | 解像度指定方式 | 環境変数OUTPUT_MAX_WIDTH | 既存実装との互換性維持 |
 | temp削除方式 | shutil.rmtree() | 標準ライブラリで信頼性高い |
-| Web版解像度 | React state + select要素 | 既存UIパターンに合致 |
+| UI解像度 | React state + select要素 | 既存UIパターンに合致 |
 
 ### 調査結果
 

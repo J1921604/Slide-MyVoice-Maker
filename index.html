@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slide Voice Maker - AI音声付き動画生成ツール（ローカル版）</title>
+    <title>Slide Voice Maker - AI音声付き動画生成ツール</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -29,7 +29,7 @@
     <script type="text/babel">
         const { useState, useRef, useEffect, useMemo } = React;
 
-        // ローカル版専用モード
+        // サーバー連携モード
         const isLocalMode = true;
 
         // Icons
@@ -336,7 +336,7 @@
                 setPdfLoading(true);
                 setStatusMessage('PDF読み込み中...');
                 try {
-                    // ローカル版: input/ にPDFを上書き保存
+                    // サーバー: input/ にPDFを上書き保存
                     if (localBackendAvailable) {
                         setStatusMessage('PDFをinput/へ保存中...');
                         const fd = new FormData();
@@ -375,7 +375,7 @@
                 setCsvFile(file);
                 setStatusMessage('原稿CSV読み込み中...');
                 try {
-                    // ローカル版: input/ にCSVを上書き保存
+                    // サーバー: input/ にCSVを上書き保存
                     if (localBackendAvailable) {
                         setStatusMessage('原稿.csvをinput/へ保存中...');
                         const fd = new FormData();
@@ -417,7 +417,7 @@
                 }
 
                 setIsGeneratingAudio(true);
-                setStatusMessage('音声生成 & 動画生成中（ローカル）...');
+                setStatusMessage('音声生成 & 動画生成中...');
                 try {
                     const body = JSON.stringify({ pdf_name: savedPdfName, resolution: selectedResolution });
                     const res = await fetchJson('/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body }, 600000);
@@ -432,7 +432,7 @@
                         setSelectedOutputName(files[files.length - 1]);
                     }
 
-                    setStatusMessage('生成完了（ローカル）。output/ に動画を書き込みました。');
+                    setStatusMessage('生成完了。output/ に動画を書き込みました。');
                 } catch (e) {
                     setStatusMessage(`生成失敗: ${e.message}`);
                 } finally {
@@ -469,7 +469,7 @@
                                 PDFスライドと原稿CSVから<br/>ナレーション付き動画を生成
                             </p>
                             <p className="text-sm text-slate-500 mb-8">
-                                ローカル版（src/server.py起動時に音声生成可能）
+                                src/server.py起動時に音声生成可能
                             </p>
                             
                             {/* ホーム画面はPDF入力ボタンのみ */}
@@ -562,7 +562,7 @@
                                             ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
                                             : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                                 }`}
-                                title={localBackendAvailable ? 'ローカルで音声+動画を生成し、output/へ上書き保存します' : 'ローカルバックエンドが起動していません'}
+                                title={localBackendAvailable ? '音声+動画を生成し、output/へ上書き保存します' : 'バックエンドが起動していません'}
                             >
                                 {isGeneratingAudio ? (
                                     <><Loader2 className="loading-spinner" /> 生成中...</>

@@ -1,6 +1,6 @@
 # Slide Voice Maker
 
-PDFスライドと原稿CSVから、AI音声ナレーション付き動画（WebM）を自動生成するローカルツールです。
+PDFスライドと原稿CSVから、AI音声ナレーション付き動画（WebM）を自動生成するツールです。
 
 **バージョン**: 1.0.0  
 **日付**: 2026-01-05  
@@ -17,14 +17,14 @@ flowchart LR
     B --> F[スライド画像PNG]
 ```
 
-### ローカル版（src/server.py起動時）
+### 主要機能
 
 | 機能 | 説明 |
 |------|------|
 | **PDF入力** | inputフォルダにPDFファイルを上書き保存 |
 | **原稿CSV入力** | inputフォルダにCSVファイルを上書き保存 |
 | **解像度選択** | 720p/1080p/1440pから選択 |
-| **音声生成** | Edge TTSで実際のAI音声を生成 |
+| **音声生成** | Edge TTSでAI音声を生成 |
 | **動画出力** | output/tempに一時ファイル、output/に動画webm出力 |
 | **原稿CSV出力** | 編集した原稿をCSVでダウンロード |
 | **動画WebM出力** | outputフォルダから選択したwebmをダウンロード |
@@ -42,17 +42,23 @@ py -3.10 -m venv .venv
 pip install -r requirements.txt
 ```
 
-### 2. サーバー起動
+### 2. ワンクリック起動
 
 ```bash
-# ローカルサーバーを起動
-py -3.10 -m uvicorn src.server:app --reload
+# start.batをダブルクリック、または
+start.bat
 ```
 
-### 3. ブラウザでアクセス
+### 3. 手動でサーバー起動
+
+```bash
+py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
+```
+
+### 4. ブラウザでアクセス
 
 ```
-http://localhost:8000/index.html
+http://127.0.0.1:8000
 ```
 
 ### 4. 動画生成手順
@@ -94,7 +100,8 @@ py -3.10 src\main.py --input input --output output --script input\原稿.csv --r
 
 ```
 Slide-Voice-Maker/
-├── index.html          # WebアプリUI（ローカル版）
+├── index.html          # WebアプリUI
+├── start.bat           # ワンクリック起動スクリプト
 ├── requirements.txt    # Python依存パッケージ
 ├── pytest.ini          # pytest設定
 ├── input/
@@ -199,6 +206,10 @@ Edge TTSはインターネット接続が必要です。ネットワークを確
 サーバーを起動してください：
 
 ```bash
+# ワンクリック起動
+start.bat
+
+# または手動起動
 py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
 ```
 
@@ -207,7 +218,6 @@ py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
 | ドキュメント | 説明 |
 |-------------|------|
 | [完全仕様書](https://github.com/J1921604/Slide-Voice-Maker/blob/main/docs/完全仕様書.md) | 詳細な機能仕様 |
-| [DEPLOY_GUIDE](https://github.com/J1921604/Slide-Voice-Maker/blob/main/docs/DEPLOY_GUIDE.md) | デプロイガイド |
 | [spec.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/spec.md) | 機能仕様書 |
 | [plan.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/plan.md) | 実装計画 |
 | [tasks.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/tasks.md) | タスク一覧 |
