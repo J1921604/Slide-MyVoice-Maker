@@ -13,7 +13,6 @@ Slide Voice Makerは、PDFスライドと原稿CSVからAI音声ナレーショ�
 
 1. **出力動画の解像度選択**: ユーザーが動画出力時に解像度（720p/1080p/1440p）を選択可能にする
 2. **temp上書き更新**: 毎回の実行時にoutput/tempフォルダを上書き更新し、古いファイルを自動削除する
-3. **GitHub Pages対応**: Web版でも同等の機能を提供する
 
 加えて、運用上の必須要件として以下を定義する:
 
@@ -24,15 +23,8 @@ Slide Voice Makerは、PDFスライドと原稿CSVからAI音声ナレーショ�
   - 音声生成ボタン実行で、output/tempフォルダに上書き更新、output/に動画webm上書き更新
   - 動画webm出力ボタン実行で、outputフォルダに保存した動画webmを選択してダウンロード
 
-- **Web版（GitHub Pages）**:
-  - 静的ホスティングで完結するため、外部APIキー不要で設計
-  - 「音声生成」は推定尺の無音音声ではなく、GitHub Actions（generate-video.yml）実行で実際のAI音声（Edge TTS）を生成
-  - リポジトリのinput/にPDF/CSVを置いてGitHub Actionsを実行
-
 - **ホーム画面（PDF未アップロード時）はPDF入力ボタンのみ表示**
 - **PDFアップロード後の画面では原稿CSV入力ボタンを維持**（文字化け対処のため）
-- **CSV出力ボタン / GitHub Actions実行ボタンはWeb UIに表示しない**
-- GitHub Pages環境でも **WebMが空にならず再生可能**であること（MediaRecorder空chunk対策）
 
 ## プロセスフロー
 
@@ -61,18 +53,17 @@ flowchart TB
         RES[解像度選択]
     end
 
-    subgraph Python版/ローカル
+    subgraph ローカルサーバー
+        SERVER[src/server.py]
         MAIN[src/main.py]
         PROC[src/processor.py]
-        SERVER[src/server.py]
         TTS[Edge TTS]
     end
 
-    subgraph Web版/GitHub Pages
+    subgraph Web UI
         HTML[index.html]
         PDFJS[PDF.js]
         CSVDEC[CSVデコード<br/>TextDecoder]
-        REC[MediaRecorder<br/>canvas.captureStream]
     end
 
     subgraph 出力
@@ -80,21 +71,15 @@ flowchart TB
         WEBM[output/*.webm]
     end
 
-    PDF --> MAIN
-    CSV --> MAIN
-    RES --> MAIN
+    PDF --> HTML
+    CSV --> HTML
+    RES --> HTML
+    HTML --> SERVER
+    SERVER --> MAIN
     MAIN --> PROC
     PROC --> TTS
     PROC --> TEMP
     PROC --> WEBM
-
-    PDF --> HTML
-    CSV --> HTML
-    RES --> HTML
-    HTML --> PDFJS
-    HTML --> CSVDEC
-    HTML --> REC
-    REC --> WEBM
 ```
 
 ### ユーザーストーリー1 - 出力解像度の選択（優先度: P1）
@@ -131,22 +116,6 @@ flowchart TB
 
 ---
 
-### ユーザーストーリー3 - GitHub Pages UI対応（優先度: P2）
-
-Web版（GitHub Pages）でも解像度選択が可能で、ブラウザ上で動画生成できる。
-
-**この優先度の理由**: Web版ユーザーへの機能提供として重要だが、ローカル版の後に対応。
-
-**独立テスト**: GitHub PagesのUIで解像度ドロップダウンを選択し、動画エクスポートボタンで指定解像度の動画がダウンロードされることを確認する。
-
-**受入シナリオ**:
-
-| 前提条件 | 操作 | 期待結果 |
-|----------|------|----------|
-| GitHub Pagesにアクセス | 1440pを選択して動画出力 | 2560x1440のWebM動画がダウンロード |
-
----
-
 ### エッジケース
 
 - 解像度選択が無効な値の場合、デフォルト720pにフォールバック
@@ -161,7 +130,7 @@ Web版（GitHub Pages）でも解像度選択が可能で、ブラウザ上で�
 | FR-002 | システムはデフォルト解像度として720p（1280x720）を使用しなければならない | P1 |
 | FR-003 | システムは動画生成前にtempフォルダを自動的にクリアしなければならない | P1 |
 | FR-004 | システムは解像度設定を環境変数OUTPUT_MAX_WIDTHで制御可能にしなければならない | P1 |
-| FR-005 | システムはindex.html（Web版）に解像度選択UIを追加しなければならない | P2 |
+| FR-005 | システムはindex.html（Web UI）に解像度選択UIを追加しなければならない | P1 |
 | FR-006 | システムはPython版（src/main.py）にコマンドライン引数--resolutionを追加しなければならない | P1 |
 | FR-007 | システムはUTF-8エンコーディングで全ファイルを処理しなければならない | P1 |
 
@@ -216,8 +185,7 @@ erDiagram
 | SC-001 | 解像度選択から動画生成完了まで、スライド1枚あたり10秒以内 | 処理時間計測 |
 | SC-002 | temp上書きによりディスク使用量が前回生成分のみに制限される | ファイルサイズ確認 |
 | SC-003 | 選択した解像度と出力動画の実解像度が100%一致する | FFmpegログ解析で検証 |
-| SC-004 | GitHub Pages版でも解像度選択が正常に動作する | Web E2Eテスト |
-| SC-005 | GitHub Pages版で生成/ダウンロードしたWebMが空でない | Web E2Eテスト |
+| SC-004 | ローカルWeb UIで解像度選択が正常に動作する | E2Eテスト |
 
 ## 技術スタック
 
@@ -228,8 +196,8 @@ erDiagram
 | 動画編集 | MoviePy < 2.0 |
 | PDF処理 | PyMuPDF (fitz) |
 | 動画エンコード | FFmpeg (VP8/VP9) |
-| Web版 | React 18 + Tailwind CSS + PDF.js + MediaRecorder |
-| デプロイ | GitHub Pages |
+| Web UI | React 18 + Tailwind CSS + PDF.js |
+| サーバー | FastAPI + Uvicorn |
 
 ## 依存関係
 

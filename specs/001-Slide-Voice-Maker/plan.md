@@ -10,25 +10,23 @@
 
 1. **出力動画の解像度選択機能**: 720p/1080p/1440pから選択可能
 2. **temp上書き更新機能**: 毎回のビルド時にtempフォルダをクリア
-3. **GitHub Pages対応**: Web版でも解像度選択が可能
 
 加えて、運用上の要件として以下も満たす:
 
 - **ローカル版**: PDFアップロードでinput/に保存、原稿CSV入力でinput/原稿.csv上書き、音声生成でEdge TTS実行、output/にwebm出力
-- **Web版**: 静的ホスティングで完結、音声生成はGitHub Actions（generate-video.yml）で実行
-- **Web版ホーム画面はPDFアップロードのみ**（CSV出力/Actions等は表示しない）
+- **Web UIはローカルサーバー連携のみ**
+- **Web UIホーム画面はPDFアップロードのみ**（CSV出力等は表示しない）
 - **PDFアップロード後の画面では原稿CSV入力を維持**（文字化け対処のため）
-- GitHub Pages環境で発生しうる **MediaRecorderの空chunk問題を回避**
 - 変更内容を **E2Eテストへ反映**し、ローカルで検証可能にする
 
 ## 技術コンテキスト
 
 **言語/バージョン**: Python 3.10.11
-**主要依存関係**: edge-tts, moviepy<2.0, pymupdf, pandas, imageio-ffmpeg
+**主要依存関係**: edge-tts, moviepy<2.0, pymupdf, pandas, imageio-ffmpeg, fastapi, uvicorn
 **ストレージ**: ローカルファイルシステム（output/, output/temp/）
 **テスト**: 手動テスト + E2Eスクリプト
-**ターゲットプラットフォーム**: Windows（ローカル）、GitHub Pages（Web版）
-**プロジェクト種別**: single（Python CLI + 静的HTML）
+**ターゲットプラットフォーム**: Windows（ローカル）
+**プロジェクト種別**: single（Python CLI + ローカルWeb UI）
 **パフォーマンス目標**: スライド1枚あたり10秒以内で動画生成
 **制約**: UTF-8エンコーディング必須、メモリ使用量はPDFサイズの5倍以内
 **規模/スコープ**: 個人/小規模チーム向け、1～100ページのPDF対応
@@ -68,10 +66,9 @@ specs/001-Slide-Voice-Maker/
 
 ```text
 Slide-Voice-Maker/
-├── index.html           # GitHub Pages用Webアプリ
+├── index.html           # ローカルWeb UI（サーバー連携）
 ├── requirements.txt     # Python依存パッケージ
-├── run.bat              # ワンクリック実行（Windows）
-├── run.ps1              # PowerShell実行
+├── preview.bat          # ローカルプレビュー起動
 ├── input/
 │   ├── *.pdf            # 入力PDFファイル
 │   └── 原稿.csv         # ナレーション原稿
@@ -79,11 +76,13 @@ Slide-Voice-Maker/
 │   ├── *.webm           # 生成された動画
 │   └── temp/            # 一時ファイル（自動クリア対象）
 ├── src/
-│   ├── main.py          # メインエントリポイント
-│   └── processor.py     # PDF処理・動画生成
+│   ├── main.py          # CLIエントリポイント
+│   ├── processor.py     # PDF処理・動画生成
+│   └── server.py        # FastAPIローカルサーバー
 └── tests/
     └── e2e/
-        └── test_resolution.py  # 解像度E2Eテスト
+        ├── test_resolution.py      # CLI解像度E2Eテスト
+        └── test_local_backend.py   # ローカルバックエンドE2Eテスト
 
 pytest.ini               # pytest設定（markers等）
 ```
@@ -109,11 +108,16 @@ flowchart TB
         ENCODE[動画エンコード]
     end
 
-    subgraph Web版 index.html
+    subgraph Web UI index.html
         DROPDOWN[解像度ドロップダウン]
         STATE[selectedResolution state]
-        DIMS[getResolutionDimensions]
-        EXPORT[exportVideo]
+        API[サーバーAPI呼び出し]
+    end
+
+    subgraph src/server.py
+        UPLOAD[PDF/CSVアップロード]
+        GENERATE[動画生成エンドポイント]
+        DOWNLOAD[ダウンロードエンドポイント]
     end
 
     ARG --> PARSER
@@ -124,8 +128,10 @@ flowchart TB
     WIDTH --> ENCODE
 
     DROPDOWN --> STATE
-    STATE --> DIMS
-    DIMS --> EXPORT
+    STATE --> API
+    API --> GENERATE
+    GENERATE --> ENCODE
+    UPLOAD --> GENERATE
 ```
 
 ## データフロー
@@ -211,11 +217,10 @@ stateDiagram-v2
 - `RESOLUTION_MAP` で引数値を環境変数値に変換
 - `os.environ["OUTPUT_MAX_WIDTH"]` に設定
 
-**Web版（index.html）**:
+**Web UI（index.html）**:
 - `selectedResolution` state追加（デフォルト: '720p'）
 - `RESOLUTION_OPTIONS` 配列で選択肢定義
-- `getResolutionDimensions()` で幅・高さ取得
-- `exportVideo()` でcanvasサイズを動的設定
+- サーバーAPIに解像度パラメータを送信
 
 ### temp上書き機能
 
@@ -234,9 +239,8 @@ stateDiagram-v2
 | テスト種別 | 内容 | 担当 |
 |------------|------|------|
 | 単体テスト | clear_temp_folder()の動作確認 | 自動 |
-| E2Eテスト | --resolution 1080で動画生成 | 手動 |
-| E2Eテスト(Web) | index.htmlでPDF/CSV→音声生成→WebM出力（空ファイル回帰） | 自動 |
-| ブラウザテスト | index.htmlで解像度選択→出力 | 手動（最終確認） |
+| CLI E2Eテスト | --resolution 1080で動画生成 | 自動 |
+| ローカルバックエンドE2Eテスト | サーバー経由でPDF/CSV→WebM生成 | 自動 |
 | 回帰テスト | 既存機能（デフォルト設定）の動作確認 | 手動 |
 
 ## リスクと対策

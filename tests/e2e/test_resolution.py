@@ -96,11 +96,11 @@ def test_cli_generates_nonempty_webm_and_resolution_1080p(tmp_path: Path) -> Non
         "1080p",
     ]
 
+    out_path = output_dir / "sample.webm"
+    
     proc = _run(cmd, env=env, cwd=repo_root)
     # NumPy互換性警告が出てもreturncode != 0になる場合があるので、出力を確認
     assert out_path.exists() or proc.returncode == 0, f"CLIが失敗しました\nstdout:\n{proc.stdout}\nstderr:\n{proc.stderr}"
-
-    out_path = output_dir / "sample.webm"
     assert out_path.exists(), "出力WebMが生成されていません"
     assert out_path.stat().st_size > 0, "出力WebMが空です"
 

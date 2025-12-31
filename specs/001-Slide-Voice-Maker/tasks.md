@@ -10,7 +10,6 @@
 - **[P]**: 並列実行可能（異なるファイル、依存関係なし）
 - **[US1]**: ユーザーストーリー1（解像度選択）
 - **[US2]**: ユーザーストーリー2（temp上書き更新）
-- **[US3]**: ユーザーストーリー3（Web版対応）
 
 ---
 
@@ -30,20 +29,17 @@ gantt
     T004-T006 CLI基盤（解像度/env）            :done, p2, after p1, 1d
 
     section Phase 3 CLI Features
-    T007-T016 解像度選択 + temp上書き           :done, p3, after p2, 2d
+    T007-T014 解像度選択 + temp上書き           :done, p3, after p2, 2d
 
-    section Phase 4 Web Core
-    T017-T020 Web UI要件（PDF前/後の表示制御） :done, p4, after p3, 1d
-    T021 WebM空ファイル対策（MediaRecorder）    :done, p5, after p4, 1d
-    T022 CSV文字化け対策（TextDecoder）         :done, p6, after p5, 1d
+    section Phase 4 Local Web UI
+    T015-T018 ローカルWeb UI（サーバー連携） :done, p4, after p3, 1d
 
-    section Phase 5 Tests/CI
-    T023 CLI E2E（解像度・非空WebM）            :done, p7, after p6, 1d
-    T024 Web E2E（PDF/CSV→音声→WebM）           :done, p8, after p7, 1d
-    T025 CI整備（生成物非コミット化）            :done, p9, after p8, 1d
+    section Phase 5 Tests
+    T019 CLI E2E（解像度・非空WebM）            :done, p5, after p4, 1d
+    T020 ローカルバックエンドE2E              :done, p6, after p5, 1d
 
     section Phase 6 Docs
-    T026-T030 ドキュメント整合                  :done, p10, after p9, 1d
+    T021-T024 ドキュメント整合                  :done, p7, after p6, 1d
 ```
 
 ---
@@ -86,8 +82,6 @@ gantt
 - [x] T008 [US1] src/main.pyで取得した幅をos.environ["OUTPUT_MAX_WIDTH"]に設定
 - [x] T009 [US1] src/processor.pyの_get_output_max_width()が環境変数を正しく読み取ることを確認
 - [x] T010 [US1] 無効な解像度値の場合は720p（デフォルト）にフォールバックするバリデーション追加
-- [x] T011 [P] [US1] run.batに解像度パラメータ受け渡し対応
-- [x] T012 [P] [US1] run.ps1に解像度パラメータ受け渡し対応
 
 **チェックポイント**: 解像度選択機能が独立して動作 ✅
 
@@ -101,49 +95,42 @@ gantt
 
 ### ユーザーストーリー2の実装
 
-- [x] T013 [US2] src/processor.pyにclear_temp_folder(temp_dir)関数を追加
-- [x] T014 [US2] clear_temp_folder()内でshutil.rmtree()とos.makedirs()を使用
-- [x] T015 [US2] process_pdf_and_script()の冒頭でclear_temp_folder()を呼び出し
-- [x] T016 [P] [US2] PermissionError時のエラーハンドリングとログ出力追加
+- [x] T011 [US2] src/processor.pyにclear_temp_folder(temp_dir)関数を追加
+- [x] T012 [US2] clear_temp_folder()内でshutil.rmtree()とos.makedirs()を使用
+- [x] T013 [US2] process_pdf_and_script()の冒頭でclear_temp_folder()を呼び出し
+- [x] T014 [P] [US2] PermissionError時のエラーハンドリングとログ出力追加
 
 **チェックポイント**: temp上書き機能が独立して動作 ✅
 
 ---
 
-## Phase 5: ユーザーストーリー3 - Web版対応（優先度: P2）
+## Phase 5: ローカルWeb UI（優先度: P1）
 
-**目標**: GitHub Pages版（index.html）でも解像度選択が可能
+**目標**: ローカルサーバー（src/server.py）と連携するWeb UI
 
-**独立テスト**: index.htmlで解像度ドロップダウンから1440pを選択し、動画エクスポートで2560x1440のWebMがダウンロードされることを確認
+**独立テスト**: index.htmlでPDF/CSV入力→音声生成→WebMダウンロードが可能であることを確認
 
-### ユーザーストーリー3の実装（Web版コア）
+### ローカルWeb UIの実装
 
-- [x] T017 [US3] index.htmlにRESOLUTION_OPTIONS配列を定義（label, value, width, height）
-- [x] T018 [US3] index.htmlにselectedResolution React stateを追加（デフォルト: '720p'）
-- [x] T019 [US3] index.htmlに解像度選択ドロップダウンUIを追加（Tailwind CSS）
-- [x] T020 [US3] exportVideo()関数でgetResolutionDimensions()を呼び出しcanvasサイズを動的設定
+- [x] T015 index.htmlにRESOLUTION_OPTIONS配列を定義（label, value, width, height）
+- [x] T016 index.htmlにローカルサーバー連携機能を実装（PDF/CSVアップロード、動画生成、ダウンロード）
+- [x] T017 src/server.pyにFastAPIエンドポイントを実装（PDF/CSVアップロード、動画生成、ファイル一覧、ダウンロード）
+- [x] T018 CSV文字化け対処をTextDecoderベースに強化（UTF-8/Shift_JIS等 + RFC4180最小対応）
 
-### 重要タスク（Web UI/不具合修正）
-
-- [x] T021 index.htmlのPDFアップロード前ホーム画面を「PDF入力ボタンのみ」にする（CSV入力/出力、Actionsを表示しない）
-- [x] T022 PDFアップロード後の画面では「原稿CSV入力ボタン」を維持し、CSV出力/Actionsは表示しない
-- [x] T023 GitHub PagesでWebMが空になる問題を回避（録画用canvasをdisplay:noneにしない、初回描画後に録画開始）
-- [x] T024 CSV文字化け対処をTextDecoderベースに強化（UTF-8/Shift_JIS等 + RFC4180最小対応）
-
-**チェックポイント**: Web版解像度選択が独立して動作 ✅
+**チェックポイント**: ローカルWeb UIが独立して動作 ✅
 
 ---
 
-## Phase 6: 仕上げとクロスカッティング関心事
+## Phase 6: 仕上げとテスト
 
 **目的**: E2Eテスト実行、ドキュメント更新、最終検証
 
-- [x] T025 [P] .github/workflows/generate-video.ymlを「生成物をコミットしない」方針へ更新
-- [x] T026 [P] README.mdをWeb UI要件/テスト/実行手順に整合
-- [x] T027 [P] docs/DEPLOY_GUIDE.mdを現行ワークフローに整合
-- [x] T028 [P] docs/完全仕様書.mdを現行仕様（Web UI/テスト/生成物方針）に整合
-- [x] T029 [P] specs/001-Slide-Voice-Maker/{spec,plan,quickstart}.mdを整合（リンクはGitHub URLへ）
-- [x] T030 ローカルE2E（CLI/Web）を実行し100%成功を確認
+- [x] T019 [P] tests/e2e/test_resolution.pyでCLI E2Eテスト（解像度・非空WebM確認）
+- [x] T020 [P] tests/e2e/test_local_backend.pyでローカルバックエンドE2Eテスト
+- [x] T021 [P] README.mdをローカル版要件/テスト/実行手順に整合
+- [x] T022 [P] docs/完全仕様書.mdを現行仕様（ローカル版のみ）に整合
+- [x] T023 [P] specs/001-Slide-Voice-Maker/{spec,plan,quickstart}.mdを整合（リンクはGitHub URLへ）
+- [x] T024 ローカルE2Eを実行し100%成功を確認
 
 **チェックポイント**: 全機能テスト・ドキュメント完了
 
@@ -158,17 +145,15 @@ flowchart TD
     P1[Phase 1<br>セットアップ] --> P2[Phase 2<br>基盤]
     P2 --> P3[Phase 3<br>US1 解像度選択]
     P2 --> P4[Phase 4<br>US2 temp上書き]
-    P2 --> P5[Phase 5<br>US3 Web版対応]
-    P3 --> P6[Phase 6<br>仕上げ]
-    P4 --> P6
-    P5 --> P6
+    P3 --> P5[Phase 5<br>ローカルWeb UI]
+    P4 --> P5
+    P5 --> P6[Phase 6<br>仕上げ]
 ```
 
 ### ユーザーストーリー依存関係
 
 - **ユーザーストーリー1（P1）**: 基盤（Phase 2）完了後に開始可能 - 他のストーリーへの依存なし
 - **ユーザーストーリー2（P1）**: 基盤（Phase 2）完了後に開始可能 - US1とは独立
-- **ユーザーストーリー3（P2）**: 基盤（Phase 2）完了後に開始可能 - US1/US2とは独立してテスト可能
 
 ### 並列実行可能タスク
 
@@ -176,27 +161,17 @@ flowchart TD
 |-------|-------------------|
 | Phase 1 | T002, T003 |
 | Phase 2 | T005, T006 |
-| Phase 3 | T011, T012 |
-| Phase 4 | T016 |
-| Phase 6 | T021, T022 |
+| Phase 5 | T015-T018 |
+| Phase 6 | T019-T023 |
 
 ---
-
-## 並列例: ユーザーストーリー1
-
-```bash
-# run.bat/run.ps1対応を同時に起動:
-タスク: "run.batに解像度パラメータ受け渡し対応"
-タスク: "run.ps1に解像度パラメータ受け渡し対応"
-```
 
 ## 並列例: 基盤完了後
 
 ```bash
-# 基盤完了後、3つのユーザーストーリーを並列開始可能:
+# 基盤完了後、2つのユーザーストーリーを並列開始可能:
 チームA: "ユーザーストーリー1 - 解像度選択"
 チームB: "ユーザーストーリー2 - temp上書き"
-チームC: "ユーザーストーリー3 - Web版対応"
 ```
 
 ---
@@ -216,22 +191,17 @@ flowchart TD
 1. セットアップ + 基盤を完了 → 基盤準備完了 ✅
 2. ユーザーストーリー1を追加 → 独立してテスト → デプロイ/デモ（MVP!）✅
 3. ユーザーストーリー2を追加 → 独立してテスト → デプロイ/デモ ✅
-4. ユーザーストーリー3を追加 → 独立してテスト → デプロイ/デモ ✅
+4. ローカルWeb UIを追加 → 独立してテスト → デプロイ/デモ ✅
 5. 各ストーリーは前のストーリーを壊さずに価値を追加
 
 ---
 
 ## タスク進捗サマリー
 
-```mermaid
-pie title タスク進捗状況
-    "完了" : 30
-```
-
 | 項目 | 数値 |
 |------|------|
-| 総タスク数 | 30 |
-| 完了 | 30 |
+| 総タスク数 | 24 |
+| 完了 | 24 |
 | 未着手 | 0 |
 
 ---
@@ -248,6 +218,6 @@ pie title タスク進捗状況
 ## 完了条件
 
 1. すべてのタスクが完了状態になっていること
-2. ローカルE2Eテスト（T023）が成功すること
-3. GitHub Pages動作確認（T024）が成功すること
-4. mainブランチへのマージ（T025）が完了すること
+2. CLI E2Eテスト（T019）が成功すること
+3. ローカルバックエンドE2Eテスト（T020）が成功すること
+4. ドキュメント整合（T021-T024）が完了すること
