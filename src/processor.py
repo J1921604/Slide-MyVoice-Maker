@@ -645,18 +645,9 @@ def combine_audio_video(output_dir: str, resolution: int = 1280, output_name: st
     print(f"Generating video with FFmpeg (high-speed mode)...")
     os.environ["OUTPUT_MAX_WIDTH"] = str(resolution)
     
-<<<<<<< HEAD
-    if subtitle:
-        # 字幕あり: 一時ファイルに動画を生成してから字幕を埋め込む
-        temp_video_path = os.path.join(temp_dir, f"_temp_{output_name}.webm")
-        _render_webm_with_ffmpeg(slides, temp_video_path, temp_dir)
-        
-        # 字幕ファイルを生成
-=======
     # 字幕ファイルを生成
     subtitle_path = None
     if subtitle:
->>>>>>> 1d5721f (fix: 字幕埋め込み機能を修正 - FFmpeg subtitlesフィルタを追加してASS字幕を動画に埋め込む - UTF-8-sig (BOM) エンコーディングでASS出力（Windows/libass対応） - Windowsパス形式をFFmpegフォーマットに変換)
         subtitle_path = os.path.join(temp_dir, f"_subtitles_{output_name}.ass")
         slides_info = [
             {
@@ -681,23 +672,8 @@ def combine_audio_video(output_dir: str, resolution: int = 1280, output_name: st
             pass
         _generate_ass_subtitle(slides_info, subtitle_path, video_width, video_height)
         print(f"Generated subtitle file: {subtitle_path}")
-<<<<<<< HEAD
-        
-        # 字幕を埋め込む
-        _embed_subtitles(temp_video_path, subtitle_path, output_path)
-        
-        # 一時ファイルを削除
-        try:
-            os.remove(temp_video_path)
-        except Exception:
-            pass
-    else:
-        # 字幕なし: 直接出力
-        _render_webm_with_ffmpeg(slides, output_path, temp_dir)
-=======
     
     _render_webm_with_ffmpeg(slides, output_path, temp_dir, subtitle_path)
->>>>>>> 1d5721f (fix: 字幕埋め込み機能を修正 - FFmpeg subtitlesフィルタを追加してASS字幕を動画に埋め込む - UTF-8-sig (BOM) エンコーディングでASS出力（Windows/libass対応） - Windowsパス形式をFFmpegフォーマットに変換)
     
     print(f"Video generated: {output_path}")
     return output_path
