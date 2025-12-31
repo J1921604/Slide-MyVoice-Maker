@@ -351,6 +351,74 @@ def _render_webm_with_ffmpeg(
         err = (safe_decode(stderr) or safe_decode(stdout)).strip()
         raise RuntimeError(f"FFmpeg failed (code={proc.returncode}): {err}")
 
+
+def _embed_subtitles(input_path: str, subtitle_path: str, output_path: str) -> None:
+    """動画に字幕を埋め込む"""
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    cpu_used = _get_vp9_cpu_used()
+    crf = _get_vp9_crf()
+    use_vp8 = _get_use_vp8()
+    threads = str(min(os.cpu_count() or 4, 8))
+    
+    # Windows用にパスをエスケープ
+    escaped_path = subtitle_path.replace('\\', '/').replace(':', '\\:')
+    vf = f"subtitles='{escaped_path}'"
+    
+    print(f"Embedding subtitles...")
+    
+    if use_vp8:
+        args = [
+            ffmpeg,
+            "-y",
+            "-hide_banner",
+            "-loglevel", "error",
+            "-nostats",
+            "-i", input_path,
+            "-vf", vf,
+            "-c:v", "libvpx",
+            "-deadline", "realtime",
+            "-cpu-used", str(min(cpu_used, 16)),
+            "-threads", threads,
+            "-b:v", "1M",
+            "-qmin", "4",
+            "-qmax", "50",
+            "-c:a", "copy",
+            output_path,
+        ]
+    else:
+        args = [
+            ffmpeg,
+            "-y",
+            "-hide_banner",
+            "-loglevel", "error",
+            "-nostats",
+            "-i", input_path,
+            "-vf", vf,
+            "-c:v", "libvpx-vp9",
+            "-deadline", "realtime",
+            "-cpu-used", str(cpu_used),
+            "-row-mt", "1",
+            "-threads", threads,
+            "-b:v", "0",
+            "-crf", str(crf),
+            "-c:a", "copy",
+            output_path,
+        ]
+    
+    proc = subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    if proc.returncode != 0:
+        stderr = proc.stderr or b""
+        def safe_decode(b: bytes) -> str:
+            for enc in ("utf-8", "cp932"):
+                try:
+                    return b.decode(enc)
+                except Exception:
+                    continue
+            return b.decode("utf-8", errors="replace")
+        err = safe_decode(stderr).strip()
+        raise RuntimeError(f"FFmpeg subtitle embedding failed (code={proc.returncode}): {err}")
+
+
 async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural"):
     """Edge TTSを使って音声を生成する"""
     communicate = edge_tts.Communicate(text, voice)
@@ -468,7 +536,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         
         current_time += duration
     
-    with open(output_path, 'w', encoding='utf-8') as f:
+    with open(output_path, 'w', encoding='utf-8-sig') as f:
         f.write(header)
         f.write('\n'.join(events))
 
@@ -568,7 +636,49 @@ def combine_audio_video(output_dir: str, resolution: int = 1280, output_name: st
     # 高速FFmpegでエンコード
     print(f"Generating video with FFmpeg (high-speed mode)...")
     os.environ["OUTPUT_MAX_WIDTH"] = str(resolution)
-    _render_webm_with_ffmpeg(slides, output_path, temp_dir)
+    
+    if subtitle:
+        # 字幕あり: 一時ファイルに動画を生成してから字幕を埋め込む
+        temp_video_path = os.path.join(temp_dir, f"_temp_{output_name}.webm")
+        _render_webm_with_ffmpeg(slides, temp_video_path, temp_dir)
+        
+        # 字幕ファイルを生成
+        subtitle_path = os.path.join(temp_dir, f"_subtitles_{output_name}.ass")
+        slides_info = [
+            {
+                'page_index': s.page_index,
+                'script': s.script_text,
+                'duration': s.duration
+            }
+            for s in slides
+        ]
+        # 動画解像度を取得
+        video_width = resolution
+        video_height = int(resolution * 9 / 16)
+        try:
+            from PIL import Image
+            with Image.open(slides[0].image_path) as img:
+                video_width, video_height = img.size
+                if video_width > resolution:
+                    ratio = resolution / video_width
+                    video_width = resolution
+                    video_height = int(video_height * ratio)
+        except Exception:
+            pass
+        _generate_ass_subtitle(slides_info, subtitle_path, video_width, video_height)
+        print(f"Generated subtitle file: {subtitle_path}")
+        
+        # 字幕を埋め込む
+        _embed_subtitles(temp_video_path, subtitle_path, output_path)
+        
+        # 一時ファイルを削除
+        try:
+            os.remove(temp_video_path)
+        except Exception:
+            pass
+    else:
+        # 字幕なし: 直接出力
+        _render_webm_with_ffmpeg(slides, output_path, temp_dir)
     
     print(f"Video generated: {output_path}")
     return output_path
