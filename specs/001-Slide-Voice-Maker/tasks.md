@@ -130,8 +130,8 @@ gantt
 - [x] T021 [P] README.mdに解像度オプションのドキュメントを追加
 - [x] T022 [P] specs/001-Slide-Voice-Maker/quickstart.mdを更新
 - [x] T023 ローカルE2Eテスト実行（py -3.10 src/main.py --resolution 1080p）
-- [ ] T024 GitHub Pages動作確認（https://j1921604.github.io/Slide-Voice-Maker/）
-- [ ] T025 mainブランチへのマージとブランチ削除
+- [x] T024 GitHub Pages動作確認（https://j1921604.github.io/Slide-Voice-Maker/）
+- [x] T025 mainブランチへのマージとブランチ削除
 
 **チェックポイント**: 全機能テスト・ドキュメント完了
 
@@ -213,15 +213,14 @@ flowchart TD
 
 ```mermaid
 pie title タスク進捗状況
-    "完了" : 22
-    "未着手" : 3
+    "完了" : 25
 ```
 
 | 項目 | 数値 |
 |------|------|
 | 総タスク数 | 25 |
-| 完了 | 22 |
-| 未着手 | 3 |
+| 完了 | 25 |
+| 未着手 | 0 |
 
 ---
 
