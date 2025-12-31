@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 # srcフォルダをパスに追加（相対インポート対応）
 sys.path.insert(0, str(Path(__file__).parent))
-from processor import clear_temp_folder, process_pdf_and_script
+from processor import clear_temp_folder, process_pdf_and_script, generate_single_audio, combine_audio_video
 
 
 def _repo_root() -> Path:
@@ -97,6 +97,19 @@ class GenerateRequest(BaseModel):
     resolution: Literal["720", "720p", "1080", "1080p", "1440", "1440p"] = "720p"
 
 
+class GenerateAudioRequest(BaseModel):
+    slide_index: int
+    script: str
+    image_data: Optional[str] = None  # Base64エンコードされた画像データ
+    resolution: Literal["720", "720p", "1080", "1080p", "1440", "1440p"] = "720p"
+
+
+class GenerateVideoRequest(BaseModel):
+    resolution: Literal["720", "720p", "1080", "1080p", "1440", "1440p"] = "720p"
+    output_name: Optional[str] = "output"  # 出力ファイル名（拡張子なし）
+    subtitle: bool = True  # 字幕ON/OFF
+
+
 @app.post("/api/generate")
 async def generate(req: GenerateRequest) -> dict[str, str]:
     repo_root = _repo_root()
@@ -132,6 +145,71 @@ async def generate(req: GenerateRequest) -> dict[str, str]:
         raise HTTPException(status_code=500, detail="動画webmの生成に失敗しました")
 
     return {"webm": webm.name, "path": str(webm)}
+
+
+@app.post("/api/generate_audio")
+async def generate_audio(req: GenerateAudioRequest) -> dict[str, str]:
+    """単一スライドの音声と画像を保存"""
+    import base64
+    
+    repo_root = _repo_root()
+    out_dir = _output_dir(repo_root)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    
+    temp_dir = out_dir / "temp"
+    temp_dir.mkdir(parents=True, exist_ok=True)
+
+    # 画像を保存（動画生成に必要）
+    if req.image_data:
+        try:
+            # data:image/png;base64,... 形式をパース
+            if ',' in req.image_data:
+                image_b64 = req.image_data.split(',', 1)[1]
+            else:
+                image_b64 = req.image_data
+            image_bytes = base64.b64decode(image_b64)
+            image_path = temp_dir / f"slide_{req.slide_index:03d}.png"
+            image_path.write_bytes(image_bytes)
+        except Exception as e:
+            print(f"Warning: Failed to save image: {e}")
+
+    # 原稿が空の場合は画像のみ保存（音声なし）
+    if not req.script or not req.script.strip():
+        return {"audio_url": "", "path": ""}
+
+    try:
+        audio_path = await generate_single_audio(req.slide_index, req.script, str(out_dir))
+        if audio_path:
+            # ブラウザからアクセス可能なURLを返す
+            relative_path = Path(audio_path).relative_to(repo_root)
+            return {"audio_url": f"/{relative_path.as_posix()}", "path": audio_path}
+        else:
+            return {"audio_url": "", "path": ""}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"音声生成エラー: {str(e)}")
+
+
+@app.post("/api/generate_video")
+async def generate_video(req: GenerateVideoRequest) -> dict[str, str]:
+    """output/temp内のファイルから動画を生成"""
+    repo_root = _repo_root()
+    out_dir = _output_dir(repo_root)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    width = RESOLUTION_MAP.get(req.resolution, 1280)
+    
+    # 出力ファイル名（PDFと同名）
+    output_name = _sanitize_filename(req.output_name) if req.output_name else "output"
+
+    try:
+        webm_path = combine_audio_video(str(out_dir), width, output_name, req.subtitle)
+        webm = Path(webm_path)
+        if webm.exists() and webm.stat().st_size > 0:
+            return {"webm": webm.name, "path": str(webm)}
+        else:
+            raise HTTPException(status_code=500, detail="動画生成に失敗しました")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"動画生成エラー: {str(e)}")
 
 
 @app.get("/api/list_outputs")

@@ -66,10 +66,13 @@ def test_local_backend_generates_and_downloads_webm(tmp_path: Path) -> None:
     env["OUTPUT_FPS"] = "15"
     env["SLIDE_RENDER_SCALE"] = "1.5"
 
+    # 仮想環境のPythonを使用
+    venv_python = repo_root / ".venv" / "Scripts" / "python.exe"
+    python_cmd = str(venv_python) if venv_python.exists() else "py"
+
     server = subprocess.Popen(
         [
-            "py",
-            "-3.10",
+            python_cmd,
             "-m",
             "uvicorn",
             "src.server:app",
@@ -106,9 +109,13 @@ def test_local_backend_generates_and_downloads_webm(tmp_path: Path) -> None:
                 page.get_by_role("button", name="原稿CSV入力").click()
             fc_csv.value.set_files(str(csv_path))
 
-            # 生成（output/に保存される）
-            page.get_by_role("button", name="音声生成").click()
+            # 画像・音声生成（output/tempに保存される）
+            page.get_by_role("button", name="画像・音声生成").click()
             page.get_by_text("生成完了").wait_for(timeout=300000)
+
+            # 動画生成（output/に保存される）
+            page.get_by_role("button", name="動画生成").click()
+            page.get_by_text("動画生成完了").wait_for(timeout=300000)
 
             # output選択とダウンロード
             page.get_by_role("button", name="動画WebM出力").wait_for(timeout=15000)

@@ -6,6 +6,11 @@ import shutil
 from dataclasses import dataclass
 from typing import List, Optional
 
+# PIL.Image.ANTIALIAS互換性修正（Pillow 10+対応）
+from PIL import Image
+if not hasattr(Image, 'ANTIALIAS'):
+    Image.ANTIALIAS = Image.Resampling.LANCZOS
+
 import fitz  # pymupdf
 import pandas as pd
 import edge_tts
@@ -350,6 +355,224 @@ async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural"):
     """Edge TTSを使って音声を生成する"""
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_path)
+
+
+async def generate_single_audio(slide_index: int, script: str, output_dir: str) -> str:
+    """単一スライドの音声を生成してファイルパスを返す"""
+    temp_dir = os.path.join(output_dir, "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    
+    audio_path = os.path.join(temp_dir, f"slide_{slide_index:03d}.mp3")
+    
+    if script and script.strip():
+        await generate_voice(script.strip(), audio_path)
+        return audio_path
+    return ""
+
+
+import re
+
+def _get_subtitle_segments(script: str) -> List[dict]:
+    """原稿を句読点で分割し、文字数比率でタイミングを計算する（プレビューと同じロジック）"""
+    if not script:
+        return []
+    
+    # 句読点で分割（プレビューと同じ正規表現）
+    raw_segments = re.split(r'([。、！？!?\n]+)', script)
+    raw_segments = [s for s in raw_segments if s.strip()]
+    
+    # テキストと句読点をマージ
+    merged_segments = []
+    i = 0
+    while i < len(raw_segments):
+        text = raw_segments[i]
+        punctuation = raw_segments[i + 1] if i + 1 < len(raw_segments) and re.match(r'^[。、！？!?\n]+$', raw_segments[i + 1]) else ""
+        if punctuation:
+            merged_segments.append(text + punctuation)
+            i += 2
+        else:
+            merged_segments.append(text)
+            i += 1
+    
+    if not merged_segments:
+        return []
+    
+    # 文字数比率でタイミング計算
+    total_chars = sum(len(s) for s in merged_segments)
+    if total_chars == 0:
+        return []
+    
+    char_count = 0
+    segments = []
+    for text in merged_segments:
+        start_ratio = char_count / total_chars
+        char_count += len(text)
+        end_ratio = char_count / total_chars
+        segments.append({
+            'text': text,
+            'start_ratio': start_ratio,
+            'end_ratio': end_ratio
+        })
+    
+    return segments
+
+
+def _generate_ass_subtitle(slides_info: List[dict], output_path: str, video_width: int, video_height: int) -> None:
+    """ASS形式の字幕ファイルを生成する（プレビューと同じセグメント分割方式）"""
+    # ASS header
+    header = f"""[Script Info]
+Title: Slide Voice Maker Subtitles
+ScriptType: v4.00+
+WrapStyle: 0
+PlayResX: {video_width}
+PlayResY: {video_height}
+ScaledBorderAndShadow: yes
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Default,Noto Sans JP,48,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,2,30,30,50,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    
+    def format_time(seconds: float) -> str:
+        """秒をASS時刻形式(H:MM:SS.CC)に変換"""
+        h = int(seconds // 3600)
+        m = int((seconds % 3600) // 60)
+        s = seconds % 60
+        return f"{h}:{m:02d}:{s:05.2f}"
+    
+    events = []
+    current_time = 0.0
+    
+    for slide in slides_info:
+        script = slide.get('script', '').strip()
+        duration = slide.get('duration', 3.0)
+        
+        if script:
+            # プレビューと同じセグメント分割
+            segments = _get_subtitle_segments(script)
+            
+            for seg in segments:
+                # 文字数比率からタイミングを計算
+                seg_start = current_time + (duration * seg['start_ratio'])
+                seg_end = current_time + (duration * seg['end_ratio'])
+                
+                # テキストをASS用にエスケープ
+                text = seg['text'].replace('\n', '\\N')
+                
+                start_str = format_time(seg_start)
+                end_str = format_time(seg_end)
+                events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{text}")
+        
+        current_time += duration
+    
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(header)
+        f.write('\n'.join(events))
+
+
+def combine_audio_video(output_dir: str, resolution: int = 1280, output_name: str = "output", subtitle: bool = True) -> str:
+    """output/temp内の音声・画像ファイルから動画を生成する（高速FFmpeg版）
+    
+    Args:
+        output_dir: 出力ディレクトリ
+        resolution: 動画の幅（px）
+        output_name: 出力ファイル名（拡張子なし）
+        subtitle: 字幕を埋め込むかどうか
+    
+    Returns:
+        生成された動画ファイルのパス
+    """
+    temp_dir = os.path.join(output_dir, "temp")
+    if not os.path.exists(temp_dir):
+        raise FileNotFoundError(f"temp folder not found: {temp_dir}")
+    
+    # 画像と音声のペアを収集
+    image_files = sorted([f for f in os.listdir(temp_dir) if f.endswith('.png')])
+    audio_files = sorted([f for f in os.listdir(temp_dir) if f.endswith('.mp3')])
+    
+    if not image_files:
+        raise ValueError("No image files found in temp folder")
+    
+    # 原稿ファイルを読み込み（字幕用）
+    script_data = {}
+    script_path = os.path.join(os.path.dirname(output_dir), "input", "原稿.csv")
+    if not os.path.exists(script_path):
+        script_path = os.path.join(output_dir, "..", "input", "原稿.csv")
+    
+    if os.path.exists(script_path):
+        try:
+            df = None
+            for enc in ("utf-8-sig", "utf-8", "cp932", "shift_jis"):
+                try:
+                    df = pd.read_csv(script_path, encoding=enc, engine="python", keep_default_na=False)
+                    break
+                except UnicodeDecodeError:
+                    continue
+            if df is not None:
+                df.columns = [str(c).strip() for c in df.columns]
+                if "index" in df.columns and "script" in df.columns:
+                    for _, row in df.iterrows():
+                        try:
+                            idx = int(row["index"])
+                            script_data[idx] = str(row["script"])
+                        except (ValueError, TypeError):
+                            pass
+        except Exception as e:
+            print(f"Warning: Failed to read script CSV: {e}")
+    
+    slides: List[_SlideItem] = []
+    silence_duration = _get_silence_slide_duration()
+    
+    for img_file in image_files:
+        # slide_000.png -> slide_000.mp3
+        base = os.path.splitext(img_file)[0]
+        audio_file = base + ".mp3"
+        img_path = os.path.join(temp_dir, img_file)
+        audio_path = os.path.join(temp_dir, audio_file) if audio_file in audio_files else None
+        
+        # スライドインデックスを抽出 (slide_000 -> 0)
+        try:
+            slide_index = int(base.split('_')[-1])
+        except (ValueError, IndexError):
+            slide_index = len(slides)
+        
+        # 音声の長さを取得
+        duration = silence_duration
+        if audio_path and os.path.exists(audio_path):
+            try:
+                duration = _get_audio_duration_seconds(audio_path)
+            except Exception:
+                pass
+        
+        # 音声がない場合は無音MP3を生成
+        if not audio_path or not os.path.exists(audio_path):
+            audio_path = os.path.join(temp_dir, f"_silence_{slide_index:03d}.mp3")
+            _ensure_silence_mp3(audio_path, duration)
+        
+        slides.append(_SlideItem(
+            page_index=slide_index,
+            image_path=img_path,
+            audio_path=audio_path,
+            script_text=script_data.get(slide_index, ''),
+            duration=duration
+        ))
+    
+    if not slides:
+        raise ValueError("No slides to process")
+    
+    output_path = os.path.join(output_dir, f"{output_name}.webm")
+    
+    # 高速FFmpegでエンコード
+    print(f"Generating video with FFmpeg (high-speed mode)...")
+    os.environ["OUTPUT_MAX_WIDTH"] = str(resolution)
+    _render_webm_with_ffmpeg(slides, output_path, temp_dir)
+    
+    print(f"Video generated: {output_path}")
+    return output_path
+
 
 async def process_pdf_and_script(pdf_path, script_path, output_dir):
     """メイン処理"""

@@ -29,16 +29,18 @@ gantt
     T004-T006 CLI基盤（解像度/env）            :done, p2, after p1, 1d
 
     section Phase 3 CLI Features
-    T007-T014 解像度選択 + temp上書き           :done, p3, after p2, 2d
+    T007-T010 解像度選択                       :done, p3, after p2, 1d
 
-    section Phase 4 Web UI
-    T015-T018 Web UI（サーバー連携）            :done, p4, after p3, 1d
+    section Phase 4 Temp Update
+    T011-T014 temp上書き                       :done, p4, after p3, 1d
 
-    section Phase 5 Tests
-    T019 CLI E2E（解像度・非空WebM）            :done, p5, after p4, 1d
-    T020 バックエンドE2E                        :done, p6, after p5, 1d
+    section Phase 5 Web UI
+    T015-T018 Web UI（サーバー連携）            :done, p5, after p4, 1d
 
-    section Phase 6 Docs
+    section Phase 6 Tests
+    T019-T020 E2Eテスト実行                    :done, p6, after p5, 1d
+
+    section Phase 7 Docs
     T021-T024 ドキュメント整合                  :done, p7, after p6, 1d
 ```
 
