@@ -67,7 +67,7 @@ specs/001-Slide-Voice-Maker/
 ```text
 Slide-Voice-Maker/
 ├── index.html           # Web UI（サーバー連携）
-├── start.bat            # ワンクリック起動スクリプト
+├── start.ps1            # ワンクリック起動スクリプト
 ├── requirements.txt     # Python依存パッケージ
 ├── preview.bat          # プレビュー起動
 ├── input/
@@ -241,7 +241,7 @@ stateDiagram-v2
 |------------|------|------|
 | 単体テスト | clear_temp_folder()の動作確認 | 自動 |
 | CLI E2Eテスト | --resolution 1080で動画生成 | 自動 |
-| ローカルバックエンドE2Eテスト | サーバー経由でPDF/CSV→WebM生成 | 自動 |
+| バックエンドE2Eテスト | サーバー経由でPDF/CSV→WebM生成 | 自動 |
 | 回帰テスト | 既存機能（デフォルト設定）の動作確認 | 手動 |
 
 ## リスクと対策

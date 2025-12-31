@@ -53,7 +53,7 @@ flowchart TB
         RES[解像度選択]
     end
 
-    subgraph ローカルサーバー
+    subgraph サーバー
         SERVER[src/server.py]
         MAIN[src/main.py]
         PROC[src/processor.py]
@@ -185,7 +185,7 @@ erDiagram
 | SC-001 | 解像度選択から動画生成完了まで、スライド1枚あたり10秒以内 | 処理時間計測 |
 | SC-002 | temp上書きによりディスク使用量が前回生成分のみに制限される | ファイルサイズ確認 |
 | SC-003 | 選択した解像度と出力動画の実解像度が100%一致する | FFmpegログ解析で検証 |
-| SC-004 | ローカルWeb UIで解像度選択が正常に動作する | E2Eテスト |
+| SC-004 | Web UIで解像度選択が正常に動作する | E2Eテスト |
 
 ## 技術スタック
 

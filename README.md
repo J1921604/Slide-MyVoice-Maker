@@ -44,9 +44,9 @@ pip install -r requirements.txt
 
 ### 2. ワンクリック起動
 
-```bash
-# start.batをダブルクリック、または
-start.bat
+```powershell
+# start.ps1を右クリック→「PowerShellで実行」、または
+powershell -ExecutionPolicy Bypass -File start.ps1
 ```
 
 ### 3. 手動でサーバー起動
@@ -101,7 +101,7 @@ py -3.10 src\main.py --input input --output output --script input\原稿.csv --r
 ```
 Slide-Voice-Maker/
 ├── index.html          # WebアプリUI
-├── start.bat           # ワンクリック起動スクリプト
+├── start.ps1           # ワンクリック起動スクリプト
 ├── requirements.txt    # Python依存パッケージ
 ├── pytest.ini          # pytest設定
 ├── input/
@@ -153,7 +153,7 @@ index,script
 # E2Eテスト（解像度・非空WebM）
 py -3.10 -m pytest -m e2e -v
 
-# ローカルバックエンドE2Eテスト
+# バックエンドE2Eテスト
 py -3.10 -m pytest tests/e2e/test_local_backend.py -v
 
 # 解像度E2Eテスト
@@ -201,13 +201,13 @@ pip install --upgrade imageio-ffmpeg
 
 Edge TTSはインターネット接続が必要です。ネットワークを確認してください。
 
-### ローカルバックエンドが検出されない
+### バックエンドが検出されない
 
 サーバーを起動してください：
 
-```bash
+```powershell
 # ワンクリック起動
-start.bat
+powershell -ExecutionPolicy Bypass -File start.ps1
 
 # または手動起動
 py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000

@@ -254,7 +254,7 @@ flowchart LR
 
 ## プロダクト機能仕様
 
-### ローカル版機能
+### 機能一覧
 
 PDFとCSVをinput/フォルダに保存し、Edge TTSで実際のAI音声を生成する。
 
@@ -271,24 +271,6 @@ flowchart TD
     I --> J[output/*.webm生成]
     J --> K[動画WebM出力ボタン]
     K --> L[選択したwebmダウンロード]
-```
-
-### Web版機能（GitHub Pages）
-
-静的ホスティングで完結するため、外部APIキー不要で設計する。
-
-- **音声生成**: GitHub Actions（generate-video.yml）でEdge TTS実行
-- **リポジトリのinputフォルダ**: PDF/CSVを配置してActionsを手動実行
-
-```mermaid
-flowchart TD
-    A[GitHub Pages index.html] --> B[PDF/CSVアップロード]
-    B --> C[ブラウザでプレビュー]
-    C --> D[音声生成ボタン]
-    D --> E[GitHub Actions へ誘導]
-    E --> F[generate-video.yml実行]
-    F --> G[Edge TTS音声生成]
-    G --> H[Artifacts出力]
 ```
 
 **Version**: 1.0.0 | **Ratified**: 2026-01-05 | **Last Amended**: 2026-01-05

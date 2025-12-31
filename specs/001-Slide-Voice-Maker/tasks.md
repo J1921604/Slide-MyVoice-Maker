@@ -31,12 +31,12 @@ gantt
     section Phase 3 CLI Features
     T007-T014 解像度選択 + temp上書き           :done, p3, after p2, 2d
 
-    section Phase 4 Local Web UI
-    T015-T018 ローカルWeb UI（サーバー連携） :done, p4, after p3, 1d
+    section Phase 4 Web UI
+    T015-T018 Web UI（サーバー連携）            :done, p4, after p3, 1d
 
     section Phase 5 Tests
     T019 CLI E2E（解像度・非空WebM）            :done, p5, after p4, 1d
-    T020 ローカルバックエンドE2E              :done, p6, after p5, 1d
+    T020 バックエンドE2E                        :done, p6, after p5, 1d
 
     section Phase 6 Docs
     T021-T024 ドキュメント整合                  :done, p7, after p6, 1d
@@ -104,20 +104,20 @@ gantt
 
 ---
 
-## Phase 5: ローカルWeb UI（優先度: P1）
+## Phase 5: Web UI（優先度: P1）
 
-**目標**: ローカルサーバー（src/server.py）と連携するWeb UI
+**目標**: サーバー（src/server.py）と連携するWeb UI
 
 **独立テスト**: index.htmlでPDF/CSV入力→音声生成→WebMダウンロードが可能であることを確認
 
-### ローカルWeb UIの実装
+### Web UIの実装
 
 - [x] T015 index.htmlにRESOLUTION_OPTIONS配列を定義（label, value, width, height）
-- [x] T016 index.htmlにローカルサーバー連携機能を実装（PDF/CSVアップロード、動画生成、ダウンロード）
+- [x] T016 index.htmlにサーバー連携機能を実装（PDF/CSVアップロード、動画生成、ダウンロード）
 - [x] T017 src/server.pyにFastAPIエンドポイントを実装（PDF/CSVアップロード、動画生成、ファイル一覧、ダウンロード）
 - [x] T018 CSV文字化け対処をTextDecoderベースに強化（UTF-8/Shift_JIS等 + RFC4180最小対応）
 
-**チェックポイント**: ローカルWeb UIが独立して動作 ✅
+**チェックポイント**: Web UIが独立して動作 ✅
 
 ---
 
@@ -126,11 +126,11 @@ gantt
 **目的**: E2Eテスト実行、ドキュメント更新、最終検証
 
 - [x] T019 [P] tests/e2e/test_resolution.pyでCLI E2Eテスト（解像度・非空WebM確認）
-- [x] T020 [P] tests/e2e/test_local_backend.pyでローカルバックエンドE2Eテスト
+- [x] T020 [P] tests/e2e/test_local_backend.pyでバックエンドE2Eテスト
 - [x] T021 [P] README.mdを要件/テスト/実行手順に整合
 - [x] T022 [P] docs/完全仕様書.mdを現行仕様に整合
 - [x] T023 [P] specs/001-Slide-Voice-Maker/{spec,plan,quickstart}.mdを整合（リンクはGitHub URLへ）
-- [x] T024 ローカルE2Eを実行し100%成功を確認
+- [x] T024 E2Eを実行し100%成功を確認
 
 **チェックポイント**: 全機能テスト・ドキュメント完了
 
@@ -191,7 +191,7 @@ flowchart TD
 1. セットアップ + 基盤を完了 → 基盤準備完了 ✅
 2. ユーザーストーリー1を追加 → 独立してテスト → デプロイ/デモ（MVP!）✅
 3. ユーザーストーリー2を追加 → 独立してテスト → デプロイ/デモ ✅
-4. ローカルWeb UIを追加 → 独立してテスト → デプロイ/デモ ✅
+4. Web UIを追加 → 独立してテスト → デプロイ/デモ ✅
 5. 各ストーリーは前のストーリーを壊さずに価値を追加
 
 ---
@@ -219,5 +219,5 @@ flowchart TD
 
 1. すべてのタスクが完了状態になっていること
 2. CLI E2Eテスト（T019）が成功すること
-3. ローカルバックエンドE2Eテスト（T020）が成功すること
+3. バックエンドE2Eテスト（T020）が成功すること
 4. ドキュメント整合（T021-T024）が完了すること
