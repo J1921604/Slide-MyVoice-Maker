@@ -28,27 +28,22 @@ if (Test-Path ".venv\Scripts\Activate.ps1") {
     pip install -r requirements.txt
 }
 
-# ポート8000の解放
-$existingProcess = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
-if ($existingProcess) {
-    Write-Host "ポート8000を解放しています..."
-    $existingProcess | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
-    Start-Sleep -Seconds 1
+# ポート8000の解放（使用中のプロセスを終了）
+Write-Host "ポート8000を確認中..."
+$portInUse = netstat -ano | Select-String ":8000\s+.*LISTENING" | ForEach-Object {
+    if ($_ -match '\s+(\d+)\s*$') { $matches[1] }
+}
+if ($portInUse) {
+    Write-Host "ポート8000を使用しているプロセス(PID: $portInUse)を終了しています..."
+    Stop-Process -Id $portInUse -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
 }
 
 Write-Host "サーバーを起動しています..."
 
-# サーバーをバックグラウンドプロセスとして起動（別ウィンドウなし）
+# サーバーをバックグラウンドで起動
 $venvPython = "$PSScriptRoot\.venv\Scripts\python.exe"
-$arguments = "-m uvicorn src.server:app --host 127.0.0.1 --port 8000"
-$pinfo = New-Object System.Diagnostics.ProcessStartInfo
-$pinfo.FileName = $venvPython
-$pinfo.Arguments = $arguments
-$pinfo.WorkingDirectory = $PSScriptRoot
-$pinfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-$pinfo.CreateNoWindow = $true
-$pinfo.UseShellExecute = $true
-$process = [System.Diagnostics.Process]::Start($pinfo)
+Start-Process -FilePath $venvPython -ArgumentList "-m", "uvicorn", "src.server:app", "--host", "127.0.0.1", "--port", "8000" -WindowStyle Hidden -WorkingDirectory $PSScriptRoot
 
 Write-Host "サーバー起動を待機中..."
 $maxWait = 30

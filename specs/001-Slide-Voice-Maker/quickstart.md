@@ -124,9 +124,9 @@ index,script
 ## Web UI
 
 **起動方法**:
-```bash
-# ワンクリック起動
-start.bat
+```powershell
+# ワンクリック起動（推奨）
+powershell -ExecutionPolicy Bypass -File start.ps1
 
 # または手動起動
 py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
@@ -137,10 +137,13 @@ py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
 ### 使用手順
 
 1. PDFファイルをアップロード
-2. 原稿CSVをアップロード（またはテキスト入力）
+2. 原稿CSVをアップロード（input/原稿.csvに保存）
 3. 解像度を選択（720p/1080p/1440p）
-4. 「音声生成」ボタンをクリック
-5. 「WebM出力」ボタンで動画ダウンロード
+4. 再生速度を選択（0.5x〜2.0x）
+5. 字幕ON/OFFを選択（動画に字幕を埋め込むかどうか）
+6. 「画像・音声生成」ボタンをクリック（output/tempに保存）
+7. 「動画生成」ボタンをクリック（output/に保存）
+8. 「動画WebM出力」ボタンで動画ダウンロード
 
 ## 環境変数
 
