@@ -759,6 +759,20 @@ def _get_subtitle_segments(script: str) -> List[dict]:
 def _generate_ass_subtitle(slides_info: List[dict], output_path: str, video_width: int, video_height: int) -> None:
     """ASS形式の字幕ファイルを生成する（プレビューと同じセグメント分割方式）"""
     # ASS header
+    # 環境変数で字幕縦マージンと配置を調整可能にする
+    try:
+        env_margin_v = int(os.environ.get("SUBTITLE_MARGIN_V", "10"))
+    except Exception:
+        env_margin_v = 40
+
+    try:
+        # ASS の Alignment 値 (1..9)。デフォルトは 2 (bottom-center)
+        env_alignment = int(os.environ.get("SUBTITLE_ALIGNMENT", "2"))
+        if not (1 <= env_alignment <= 9):
+            env_alignment = 2
+    except Exception:
+        env_alignment = 2
+
     header = f"""[Script Info]
 Title: Slide Voice Maker Subtitles
 ScriptType: v4.00+
@@ -769,7 +783,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Noto Sans JP,34,&H00FFFFFF,&H000000FF,&H00000000,&H90040404,-1,0,0,0,100,100,0,0,3,2,0,2,30,30,20,1
+Style: Default,Noto Sans JP,34,&H00FFFFFF,&H000000FF,&H00000000,&H90040404,-1,0,0,0,100,100,0,0,3,2,0,{env_alignment},30,30,{env_margin_v},1
 
 
 [Events]
@@ -804,7 +818,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 
                 start_str = format_time(seg_start)
                 end_str = format_time(seg_end)
-                events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,0,,{text}")
+                # per-event の MarginV を環境変数で制御して、下寄せの高さを調整できるようにする
+                events.append(f"Dialogue: 0,{start_str},{end_str},Default,,0,0,{env_margin_v},,{text}")
         
         current_time += duration
     
