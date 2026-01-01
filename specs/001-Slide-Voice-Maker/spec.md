@@ -211,6 +211,8 @@ moviepy<2.0
 pymupdf
 pandas
 imageio-ffmpeg
+Pillow
+requests
 pytest
-playwright
+
 ```

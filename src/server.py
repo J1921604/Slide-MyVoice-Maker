@@ -98,16 +98,29 @@ class GenerateRequest(BaseModel):
 
 
 class GenerateAudioRequest(BaseModel):
+    output_name: Optional[str] = None  # tempスコープ（PDF名など）。未指定なら従来通り output/temp
     slide_index: int
     script: str
     image_data: Optional[str] = None  # Base64エンコードされた画像データ
     resolution: Literal["720", "720p", "1080", "1080p", "1440", "1440p"] = "720p"
 
 
+class ScriptItem(BaseModel):
+    index: int
+    script: str
+
+
 class GenerateVideoRequest(BaseModel):
     resolution: Literal["720", "720p", "1080", "1080p", "1440", "1440p"] = "720p"
     output_name: Optional[str] = "output"  # 出力ファイル名（拡張子なし）
     subtitle: bool = True  # 字幕ON/OFF
+    slides_count: Optional[int] = None  # 期待スライド数（旧ファイル混入の防御）
+    format: Literal["webm", "mp4"] = "webm"  # 出力形式
+    scripts: Optional[list[ScriptItem]] = None  # UI上の原稿（index,script）。指定時は input/原稿.csv より優先。
+
+
+class ClearTempRequest(BaseModel):
+    scope: Optional[str] = None  # None なら output/temp を全削除。指定時は output/temp/<scope> のみ
 
 
 @app.post("/api/generate")
@@ -156,7 +169,12 @@ async def generate_audio(req: GenerateAudioRequest) -> dict[str, str]:
     out_dir = _output_dir(repo_root)
     out_dir.mkdir(parents=True, exist_ok=True)
     
-    temp_dir = out_dir / "temp"
+    scope = None
+    if req.output_name:
+        # output_nameはフォルダ名にも使うのでサニタイズ
+        scope = _sanitize_filename(req.output_name)
+
+    temp_dir = (out_dir / "temp" / scope) if scope else (out_dir / "temp")
     temp_dir.mkdir(parents=True, exist_ok=True)
 
     # 画像を保存（動画生成に必要）
@@ -178,7 +196,12 @@ async def generate_audio(req: GenerateAudioRequest) -> dict[str, str]:
         return {"audio_url": "", "path": ""}
 
     try:
-        audio_path = await generate_single_audio(req.slide_index, req.script, str(out_dir))
+        audio_path = await generate_single_audio(
+            req.slide_index,
+            req.script,
+            str(out_dir),
+            temp_dir=str(temp_dir),
+        )
         if audio_path:
             # ブラウザからアクセス可能なURLを返す
             relative_path = Path(audio_path).relative_to(repo_root)
@@ -187,6 +210,28 @@ async def generate_audio(req: GenerateAudioRequest) -> dict[str, str]:
             return {"audio_url": "", "path": ""}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"音声生成エラー: {str(e)}")
+
+
+@app.post("/api/clear_temp")
+def clear_temp(req: ClearTempRequest) -> JSONResponse:
+    """output/temp を削除して再作成する。
+
+    要件:
+      - 画像・音声生成ボタン実行時に output\\temp 内の全ファイルを削除し、上書き更新できること。
+    """
+    repo_root = _repo_root()
+    out_dir = _output_dir(repo_root)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    temp_root = out_dir / "temp"
+    if req.scope:
+        scope = _sanitize_filename(req.scope)
+        target = temp_root / scope
+    else:
+        target = temp_root
+
+    ok = clear_temp_folder(str(target))
+    return JSONResponse({"ok": bool(ok), "cleared": str(target)})
 
 
 @app.post("/api/generate_video")
@@ -201,11 +246,31 @@ async def generate_video(req: GenerateVideoRequest) -> dict[str, str]:
     # 出力ファイル名（PDFと同名）
     output_name = _sanitize_filename(req.output_name) if req.output_name else "output"
 
+    out_format = (req.format or "webm").lower().strip()
+
     try:
-        webm_path = combine_audio_video(str(out_dir), width, output_name, req.subtitle)
-        webm = Path(webm_path)
-        if webm.exists() and webm.stat().st_size > 0:
-            return {"webm": webm.name, "path": str(webm)}
+        script_override = None
+        if req.scripts is not None:
+            script_override = {int(s.index): ("" if s.script is None else str(s.script)) for s in req.scripts}
+
+        video_path = combine_audio_video(
+            str(out_dir),
+            width,
+            output_name,
+            req.subtitle,
+            slides_count=req.slides_count,
+            output_format=out_format,
+            script_data_override=script_override,
+        )
+        video = Path(video_path)
+        if video.exists() and video.stat().st_size > 0:
+            # 後方互換: webmの場合はwebmキーも返す
+            payload: dict[str, str] = {"filename": video.name, "path": str(video)}
+            if video.suffix.lower() == ".webm":
+                payload["webm"] = video.name
+            if video.suffix.lower() == ".mp4":
+                payload["mp4"] = video.name
+            return payload
         else:
             raise HTTPException(status_code=500, detail="動画生成に失敗しました")
     except Exception as e:
@@ -218,8 +283,9 @@ def list_outputs() -> dict[str, list[str]]:
     out_dir = _output_dir(repo_root)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    files = sorted([p.name for p in out_dir.glob("*.webm")])
-    return {"webm": files}
+    webm_files = sorted([p.name for p in out_dir.glob("*.webm")])
+    mp4_files = sorted([p.name for p in out_dir.glob("*.mp4")])
+    return {"webm": webm_files, "mp4": mp4_files}
 
 
 @app.get("/api/download")
@@ -229,18 +295,16 @@ def download(name: str) -> FileResponse:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     safe = _sanitize_filename(name)
-    if not safe.lower().endswith(".webm"):
-        raise HTTPException(status_code=400, detail=".webm を指定してください")
+    lower = safe.lower()
+    if not (lower.endswith(".webm") or lower.endswith(".mp4")):
+        raise HTTPException(status_code=400, detail=".webm または .mp4 を指定してください")
 
     path = out_dir / safe
     if not path.exists():
         raise HTTPException(status_code=404, detail="指定ファイルが見つかりません")
 
-    return FileResponse(
-        path=str(path),
-        media_type="video/webm",
-        filename=safe,
-    )
+    media_type = "video/webm" if lower.endswith(".webm") else "video/mp4"
+    return FileResponse(path=str(path), media_type=media_type, filename=safe)
 
 
 # APIより後に static をマウント（/api を潰さない）

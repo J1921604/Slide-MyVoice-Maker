@@ -41,8 +41,11 @@ output/*.webm
 output/*.mp3
 output/*.wav
 output/*.png
+output/*.md
+test_tmp/
 *.tmp
 *.log
 
 # Keep output folder but ignore temp
 !output/.gitkeep
+

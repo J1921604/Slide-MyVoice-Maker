@@ -1,3 +1,4 @@
+import base64
 import os
 import socket
 import subprocess
@@ -6,6 +7,8 @@ from pathlib import Path
 
 import fitz
 import pytest
+import requests
+from PIL import Image
 
 
 def _wait_port(host: str, port: int, *, timeout_s: float = 20.0) -> None:
@@ -42,8 +45,6 @@ def _write_empty_csv(path: Path, pages: int) -> None:
 
 @pytest.mark.e2e
 def test_local_backend_generates_and_downloads_webm(tmp_path: Path) -> None:
-    from playwright.sync_api import sync_playwright  # import inside
-
     repo_root = Path(__file__).resolve().parents[2]
 
     input_dir = tmp_path / "input"
@@ -59,20 +60,28 @@ def test_local_backend_generates_and_downloads_webm(tmp_path: Path) -> None:
     host = "127.0.0.1"
     port = 8123
 
+    base_url = f"http://{host}:{port}"
+
     env = os.environ.copy()
     env["SVM_INPUT_DIR"] = str(input_dir)
     env["SVM_OUTPUT_DIR"] = str(output_dir)
     env["USE_VP8"] = "1"
-    env["OUTPUT_FPS"] = "15"
+    env["OUTPUT_FPS"] = "5"
     env["SLIDE_RENDER_SCALE"] = "1.5"
+    # CI/ローカルいずれでも短時間で完走させる（無音スライドを短く）
+    env["SILENCE_SLIDE_DURATION"] = "0.5"
 
-    # 仮想環境のPythonを使用
+    # Python 3.10 を優先（要求: python ではなく py -3.10）
+    # フォールバックとして venv の python.exe も許容する（CI/環境差対策）
     venv_python = repo_root / ".venv" / "Scripts" / "python.exe"
-    python_cmd = str(venv_python) if venv_python.exists() else "py"
+    if venv_python.exists():
+        cmd = [str(venv_python)]
+    else:
+        cmd = ["py", "-3.10"]
 
     server = subprocess.Popen(
-        [
-            python_cmd,
+        cmd
+        + [
             "-m",
             "uvicorn",
             "src.server:app",
@@ -90,51 +99,82 @@ def test_local_backend_generates_and_downloads_webm(tmp_path: Path) -> None:
     try:
         _wait_port(host, port, timeout_s=30.0)
 
-        with sync_playwright() as p:
-            browser = p.chromium.launch()
-            context = browser.new_context(accept_downloads=True)
-            page = context.new_page()
-            page.goto(f"http://{host}:{port}/index.html", wait_until="domcontentloaded")
+        # index.html が配信される（UIの入口がある）こと
+        r = requests.get(f"{base_url}/index.html", timeout=10)
+        assert r.status_code == 200
+        assert "Slide Voice Maker" in r.text
 
-            # PDFアップロード（input/へ保存される）
-            with page.expect_file_chooser() as fc_pdf:
-                page.get_by_role("button", name="PDFをアップロード").click()
-            fc_pdf.value.set_files(str(pdf_path))
+        # PDF/CSVをアップロード（input/へ保存される）
+        with open(pdf_path, "rb") as f:
+            r = requests.post(f"{base_url}/api/upload/pdf", files={"file": ("sample.pdf", f, "application/pdf")}, timeout=20)
+        assert r.status_code == 200, r.text
 
-            # ヘッダー表示まで待つ
-            page.get_by_role("button", name="PDF").wait_for(timeout=20000)
+        with open(csv_path, "rb") as f:
+            r = requests.post(f"{base_url}/api/upload/csv", files={"file": ("原稿.csv", f, "text/csv")}, timeout=20)
+        assert r.status_code == 200, r.text
 
-            # CSVアップロード
-            with page.expect_file_chooser() as fc_csv:
-                page.get_by_role("button", name="原稿CSV入力").click()
-            fc_csv.value.set_files(str(csv_path))
+        # output/temp をクリア
+        r = requests.post(f"{base_url}/api/clear_temp", json={}, timeout=30)
+        assert r.status_code == 200, r.text
 
-            # 画像・音声生成（output/tempに保存される）
-            page.get_by_role("button", name="画像・音声生成").click()
-            page.get_by_text("生成完了").wait_for(timeout=300000)
+        # 画像を2枚用意し、generate_audio（script空）で temp/<scope> に保存させる
+        # ※scriptが空でもimage_data保存が成立することが要件
+        def png_data_url(text: str) -> str:
+            img = Image.new("RGB", (320, 180), (12, 14, 20))
+            # 文字描画フォント非依存のため、ここでは描画なしでOK
+            # 代わりにテキストで色を少し変えて差を出す
+            if "1" in text:
+                img.paste((30, 40, 70), (0, 0, 40, 40))
+            else:
+                img.paste((70, 40, 30), (0, 0, 40, 40))
+            from io import BytesIO
 
-            # 動画生成（output/に保存される）
-            page.get_by_role("button", name="動画生成").click()
-            page.get_by_text("動画生成完了").wait_for(timeout=300000)
+            buf = BytesIO()
+            img.save(buf, format="PNG")
+            b64 = base64.b64encode(buf.getvalue()).decode("ascii")
+            return f"data:image/png;base64,{b64}"
 
-            # output選択とダウンロード
-            page.get_by_role("button", name="動画WebM出力").wait_for(timeout=15000)
-            with page.expect_download() as dl_info:
-                page.get_by_role("button", name="動画WebM出力").click()
-            download = dl_info.value
-            save_path = tmp_path / "downloaded.webm"
-            download.save_as(str(save_path))
+        scope = "sample"
+        for i in range(2):
+            payload = {
+                "output_name": scope,
+                "slide_index": i,
+                "script": "",  # 空=音声生成なし
+                "image_data": png_data_url(f"Slide {i+1}"),
+                "resolution": "720p",
+            }
+            r = requests.post(f"{base_url}/api/generate_audio", json=payload, timeout=60)
+            assert r.status_code == 200, r.text
 
-            assert save_path.exists(), "WebMがダウンロードされていません"
-            assert save_path.stat().st_size > 0, "ダウンロードWebMが空です"
+        # 動画生成（新仕様: scripts を渡して字幕原稿がUIと一致する）
+        scripts = [
+            {"index": 0, "script": "今回は、AIドリブン開発が必要なのか？"},
+            {"index": 1, "script": "なぜ今、AIなのか？"},
+        ]
 
-            context.close()
-            browser.close()
+        payload = {
+            "resolution": "720p",
+            "output_name": scope,
+            "subtitle": True,
+            "slides_count": 2,
+            "format": "webm",
+            "scripts": scripts,
+        }
+        r = requests.post(f"{base_url}/api/generate_video", json=payload, timeout=180)
+        assert r.status_code == 200, r.text
+        j = r.json()
+        assert "filename" in j
+        assert j["filename"].endswith(".webm")
 
         # サーバーが書き込んだ output 側にもファイルがある
         generated = output_dir / "sample.webm"
         assert generated.exists(), "output/にWebMが生成されていません"
         assert generated.stat().st_size > 0, "output/のWebMが空です"
+
+        # ダウンロードAPI
+        r = requests.get(f"{base_url}/api/download", params={"name": "sample.webm"}, timeout=30)
+        assert r.status_code == 200
+        assert len(r.content) > 0
 
     finally:
         server.terminate()

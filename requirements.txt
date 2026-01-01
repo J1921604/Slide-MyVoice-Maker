@@ -6,5 +6,7 @@ imageio-ffmpeg
 fastapi
 uvicorn
 python-multipart
+Pillow
+requests
 pytest
-playwright
+

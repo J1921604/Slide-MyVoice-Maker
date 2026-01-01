@@ -163,12 +163,6 @@ py -3.10 -m pytest tests/e2e/test_local_backend.py -v
 py -3.10 -m pytest tests/e2e/test_resolution.py -v
 ```
 
-Playwrightのブラウザが未導入の場合：
-
-```bash
-py -3.10 -m playwright install chromium
-```
-
 ## 📊 パフォーマンス改善
 
 動画生成が遅い場合：

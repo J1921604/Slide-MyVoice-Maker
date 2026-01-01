@@ -3,7 +3,10 @@ import subprocess
 import wave
 import contextlib
 import shutil
+import csv
+import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import List, Optional
 
 # PIL.Image.ANTIALIAS互換性修正（Pillow 10+対応）
@@ -11,16 +14,49 @@ from PIL import Image
 if not hasattr(Image, 'ANTIALIAS'):
     Image.ANTIALIAS = Image.Resampling.LANCZOS
 
-import fitz  # pymupdf
-import pandas as pd
-import edge_tts
 import imageio_ffmpeg
-from moviepy.editor import (
-    ImageClip,
-    AudioFileClip,
-    CompositeVideoClip,
-    concatenate_videoclips,
-)
+
+
+def _read_script_csv(script_path: str) -> dict[int, str]:
+    """原稿CSV（index,script）を辞書化して返す。
+
+    - UTF-8(BOMあり/なし) + cp932/shift_jis を順に試す
+    - pandas依存を避け、pytest収集や軽量環境での安定性を上げる
+    """
+    last_err: Exception | None = None
+    for enc in ("utf-8-sig", "utf-8", "cp932", "shift_jis"):
+        try:
+            with open(script_path, "r", encoding=enc, newline="") as f:
+                reader = csv.DictReader(f)
+                # ヘッダ正規化
+                fieldnames = [str(n).strip() for n in (reader.fieldnames or [])]
+                # DictReaderは fieldnames を固定して持つため、ここで差し替える
+                reader.fieldnames = fieldnames
+
+                if "index" not in fieldnames or "script" not in fieldnames:
+                    raise ValueError("Script CSV must have columns: index, script")
+
+                out: dict[int, str] = {}
+                for row in reader:
+                    try:
+                        raw_idx = row.get("index", "")
+                        idx = int(str(raw_idx).strip())
+                    except Exception:
+                        continue
+
+                    script = row.get("script", "")
+                    out[idx] = "" if script is None else str(script)
+                return out
+        except UnicodeDecodeError as e:
+            last_err = e
+            continue
+        except Exception as e:
+            last_err = e
+            continue
+
+    if last_err is not None:
+        raise last_err
+    return {}
 
 
 @dataclass
@@ -136,7 +172,10 @@ def _write_concat_list(paths: List[str], durations: Optional[List[float]], out_p
     with open(out_path, "w", encoding="utf-8", newline="\n") as f:
         for idx, p in enumerate(paths):
             f.write(f"file '{q(p)}'\n")
-            if durations is not None and idx < len(paths) - 1:
+            if durations is not None:
+                # concat demuxer の duration は「直前の file」に適用される。
+                # 最後のファイルにも duration を効かせるには、duration 行を書いたあと
+                # 終端用に最後の file を再掲する必要がある。
                 d = float(durations[idx])
                 if d <= 0:
                     d = 0.01
@@ -198,7 +237,41 @@ def _ensure_silence_mp3(path: str, duration: float, sample_rate: int = 24000) ->
 
 
 def _get_audio_duration_seconds(path: str) -> float:
-    """MoviePyで音声長を取得（必ずcloseする）。"""
+    """音声長(秒)を取得する。
+
+    速度改善のため、まずはFFmpegのヘッダ出力（Duration行）をパースして取得する。
+    取得に失敗した場合のみ MoviePy にフォールバックする。
+    """
+
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    try:
+        # ffmpeg は出力未指定だと returncode!=0 になるが、Duration は stderr に出る
+        proc = subprocess.run(
+            [ffmpeg, "-hide_banner", "-i", path],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        stderr = proc.stderr or b""
+        try:
+            text = stderr.decode("utf-8")
+        except Exception:
+            text = stderr.decode("utf-8", errors="replace")
+
+        m = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", text)
+        if m:
+            h = int(m.group(1))
+            mi = int(m.group(2))
+            s = float(m.group(3))
+            dur = h * 3600 + mi * 60 + s
+            if dur > 0:
+                return float(dur)
+    except Exception:
+        # fall back
+        pass
+
+    # moviepy は import が重い/環境差で遅延しやすいので遅延importする。
+    from moviepy.editor import AudioFileClip
+
     clip = None
     try:
         clip = AudioFileClip(path)
@@ -235,13 +308,33 @@ def _render_webm_with_ffmpeg(
     _write_concat_list(image_paths, durations, video_list)
     _write_concat_list(audio_paths, None, audio_list)
 
+    # 重要:
+    # concat demuxer + VFRだと「各スライド=少数フレーム」になりやすく、
+    # 焼き込み字幕(subtitles/ass)はフレーム更新が無いとテキストも切り替わらない。
+    # そのため、fpsフィルタでCFR相当のフレームを生成してから字幕を焼き込む。
+    vf_parts: List[str] = []
+
+    # 出力を16:9に揃え、余白はグレー背景でパディング（字幕の視認性も上がる）
+    max_h = int(round(max_w * 9 / 16))
+
+    has_subtitles = bool(subtitle_path and os.path.exists(subtitle_path))
+    if has_subtitles:
+        # concat demuxer + VFR（少フレーム）だと字幕がスライド内で更新されないため、
+        # まずCFR相当のフレームを作ってから字幕を焼き込む。
+        vf_parts.append(f"fps={fps}")
+
     # 高速化: bilinearよりfast_bilinearを使用
-    vf = f"scale='min(iw,{max_w})':-2:flags=fast_bilinear,format=yuv420p"
-    
-    # 字幕フィルタを追加
-    if subtitle_path and os.path.exists(subtitle_path):
+    # force_original_aspect_ratio=decrease で縦横比を維持して16:9に収め、padでグレー背景を付ける
+    vf_parts.append(f"scale={max_w}:{max_h}:force_original_aspect_ratio=decrease:flags=fast_bilinear")
+    vf_parts.append(f"pad={max_w}:{max_h}:(ow-iw)/2:(oh-ih)/2:color=0x303030")
+
+    if has_subtitles:
+        # Windowsドライブレターの ':' は libass/subtitles フィルタでエスケープが必要
         abs_sub = os.path.abspath(subtitle_path).replace('\\', '/').replace(':', '\\:')
-        vf = f"subtitles='{abs_sub}'," + vf
+        vf_parts.append(f"subtitles='{abs_sub}'")
+
+    vf_parts.append("format=yuv420p")
+    vf = ",".join(vf_parts)
 
     if use_vp8:
         # VP8は高速だがやや低品質
@@ -266,8 +359,6 @@ def _render_webm_with_ffmpeg(
             audio_list,
             "-vf",
             vf,
-            "-fps_mode",
-            "vfr",
             "-c:v",
             "libvpx",  # VP8
             "-deadline",
@@ -283,9 +374,12 @@ def _render_webm_with_ffmpeg(
             "-qmax",
             "50",
             "-c:a",
-            "libvorbis",  # Vorbis for VP8
-            "-q:a",
-            "4",
+            # WebMはVP8+Opusも一般に再生可能（音声はOpusの方が軽量/高速なことが多い）
+            "libopus",
+            "-b:a",
+            "64k",
+            "-vbr",
+            "on",
             "-shortest",
             output_path,
         ]
@@ -312,8 +406,6 @@ def _render_webm_with_ffmpeg(
             audio_list,
             "-vf",
             vf,
-            "-fps_mode",
-            "vfr",
             "-c:v",
             "libvpx-vp9",
             "-deadline",
@@ -358,6 +450,102 @@ def _render_webm_with_ffmpeg(
         raise RuntimeError(f"FFmpeg failed (code={proc.returncode}): {err}")
 
 
+def _render_mp4_with_ffmpeg(
+    slides: List[_SlideItem],
+    output_path: str,
+    temp_dir: str,
+    subtitle_path: str = None,
+) -> None:
+    """静止画+音声からMP4(H.264/AAC)を生成する。"""
+    ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
+    fps = _get_output_fps()
+    max_w = _get_output_max_width()
+    threads = str(min(os.cpu_count() or 4, 8))
+
+    video_list = os.path.join(temp_dir, "__video_concat.txt")
+    audio_list = os.path.join(temp_dir, "__audio_concat.txt")
+
+    image_paths = [s.image_path for s in slides]
+    audio_paths = [s.audio_path for s in slides]
+    durations = [s.duration for s in slides]
+
+    _write_concat_list(image_paths, durations, video_list)
+    _write_concat_list(audio_paths, None, audio_list)
+
+    vf_parts: List[str] = []
+
+    max_h = int(round(max_w * 9 / 16))
+    has_subtitles = bool(subtitle_path and os.path.exists(subtitle_path))
+    if has_subtitles:
+        vf_parts.append(f"fps={fps}")
+
+    vf_parts.append(f"scale={max_w}:{max_h}:force_original_aspect_ratio=decrease:flags=fast_bilinear")
+    vf_parts.append(f"pad={max_w}:{max_h}:(ow-iw)/2:(oh-ih)/2:color=0x303030")
+
+    if has_subtitles:
+        abs_sub = os.path.abspath(subtitle_path).replace('\\', '/').replace(':', '\\:')
+        vf_parts.append(f"subtitles='{abs_sub}'")
+
+    vf_parts.append("format=yuv420p")
+    vf = ",".join(vf_parts)
+
+    args = [
+        ffmpeg,
+        "-y",
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-nostats",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        video_list,
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        audio_list,
+        "-vf",
+        vf,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-threads",
+        threads,
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-movflags",
+        "+faststart",
+        "-shortest",
+        output_path,
+    ]
+
+    print(f"FFmpeg: {ffmpeg}")
+    print("Encoding MP4 (H.264/AAC, high-speed mode)...")
+    proc = subprocess.run(args, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    if proc.returncode != 0:
+        stderr = proc.stderr or b""
+
+        def safe_decode(b: bytes) -> str:
+            for enc in ("utf-8", "cp932"):
+                try:
+                    return b.decode(enc)
+                except Exception:
+                    continue
+            return b.decode("utf-8", errors="replace")
+
+        err = safe_decode(stderr).strip()
+        raise RuntimeError(f"FFmpeg failed (code={proc.returncode}): {err}")
+
+
 def _embed_subtitles(input_path: str, subtitle_path: str, output_path: str) -> None:
     """動画に字幕を埋め込む"""
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
@@ -368,7 +556,10 @@ def _embed_subtitles(input_path: str, subtitle_path: str, output_path: str) -> N
     
     # Windows用にパスをエスケープ
     escaped_path = subtitle_path.replace('\\', '/').replace(':', '\\:')
-    vf = f"subtitles='{escaped_path}'"
+    fps = _get_output_fps()
+    # _render_webm_with_ffmpeg と同様、字幕はフレーム更新がないと切り替わらないため
+    # fps→subtitles の順で適用する。
+    vf = f"fps={fps},subtitles='{escaped_path}'"
     
     print(f"Embedding subtitles...")
     
@@ -427,24 +618,98 @@ def _embed_subtitles(input_path: str, subtitle_path: str, output_path: str) -> N
 
 async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural"):
     """Edge TTSを使って音声を生成する"""
+    # edge_tts は import が重い/環境差があるため遅延import
+    import edge_tts
+
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_path)
 
 
-async def generate_single_audio(slide_index: int, script: str, output_dir: str) -> str:
-    """単一スライドの音声を生成してファイルパスを返す"""
-    temp_dir = os.path.join(output_dir, "temp")
-    os.makedirs(temp_dir, exist_ok=True)
-    
-    audio_path = os.path.join(temp_dir, f"slide_{slide_index:03d}.mp3")
-    
+async def generate_single_audio(
+    slide_index: int,
+    script: str,
+    output_dir: str,
+    temp_dir: Optional[str] = None,
+) -> str:
+    """単一スライドの音声を生成してファイルパスを返す。
+
+    Args:
+        slide_index: スライド番号
+        script: 原稿
+        output_dir: 出力ディレクトリ
+        temp_dir: 保存先tempディレクトリ（指定がなければ output_dir/temp）
+    """
+    base_temp_dir = temp_dir or os.path.join(output_dir, "temp")
+    os.makedirs(base_temp_dir, exist_ok=True)
+
+    audio_path = os.path.join(base_temp_dir, f"slide_{slide_index:03d}.mp3")
+
     if script and script.strip():
         await generate_voice(script.strip(), audio_path)
         return audio_path
     return ""
 
 
-import re
+
+def _select_temp_dir(output_dir: str, output_name: str, temp_subdir: Optional[str] = None) -> str:
+    """動画生成に使う temp ディレクトリを決める。
+
+    互換性のため、まず output/temp/<subdir>（または output_name）を優先し、
+    無ければ従来の output/temp を使う。
+    """
+    base = os.path.join(output_dir, "temp")
+    if temp_subdir:
+        cand = os.path.join(base, temp_subdir)
+        if os.path.isdir(cand):
+            return cand
+
+    cand2 = os.path.join(base, output_name)
+    if os.path.isdir(cand2):
+        return cand2
+
+    return base
+
+
+def _parse_slide_index_from_stem(stem: str) -> Optional[int]:
+    """ファイル名stemからスライド番号を抽出する（例: slide_000 / slide-12 / slide12）。"""
+    m = re.match(r"^slide(?:[_-]?(\d+))$", stem)
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except Exception:
+        return None
+
+
+def _pick_newest(paths: List[str]) -> str:
+    """同一indexに複数候補がある場合、mtimeが新しいものを採用する。"""
+    if len(paths) == 1:
+        return paths[0]
+    best = paths[0]
+    best_t = -1.0
+    for p in paths:
+        try:
+            t = os.path.getmtime(p)
+        except Exception:
+            t = -1.0
+        if t > best_t:
+            best = p
+            best_t = t
+    return best
+
+
+def _resolve_audio_path(temp_dir: str, slide_index: int) -> Optional[str]:
+    """スライド番号から音声ファイル候補を探して返す。"""
+    candidates = [
+        os.path.join(temp_dir, f"slide_{slide_index:03d}.mp3"),
+        os.path.join(temp_dir, f"slide_{slide_index}.mp3"),
+        os.path.join(temp_dir, f"audio_{slide_index:03d}.mp3"),
+        os.path.join(temp_dir, f"audio_{slide_index}.mp3"),
+    ]
+    for p in candidates:
+        if os.path.exists(p):
+            return p
+    return None
 
 def _get_subtitle_segments(script: str) -> List[dict]:
     """原稿を句読点で分割し、文字数比率でタイミングを計算する（プレビューと同じロジック）"""
@@ -504,7 +769,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Noto Sans JP,48,&H00FFFFFF,&H000000FF,&H00000000,&H80000000,-1,0,0,0,100,100,0,0,1,3,1,2,30,30,50,1
+Style: Default,Noto Sans JP,34,&H00FFFFFF,&H000000FF,&H00000000,&H90040404,-1,0,0,0,100,100,0,0,3,2,0,2,30,30,20,1
+
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -549,7 +815,16 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
         f.write('\n')
 
 
-def combine_audio_video(output_dir: str, resolution: int = 1280, output_name: str = "output", subtitle: bool = True) -> str:
+def combine_audio_video(
+    output_dir: str,
+    resolution: int = 1280,
+    output_name: str = "output",
+    subtitle: bool = True,
+    slides_count: Optional[int] = None,
+    temp_subdir: Optional[str] = None,
+    output_format: str = "webm",
+    script_data_override: Optional[dict[int, str]] = None,
+) -> str:
     """output/temp内の音声・画像ファイルから動画を生成する（高速FFmpeg版）
     
     Args:
@@ -561,85 +836,135 @@ def combine_audio_video(output_dir: str, resolution: int = 1280, output_name: st
     Returns:
         生成された動画ファイルのパス
     """
-    temp_dir = os.path.join(output_dir, "temp")
+    temp_dir = _select_temp_dir(output_dir, output_name=output_name, temp_subdir=temp_subdir)
     if not os.path.exists(temp_dir):
         raise FileNotFoundError(f"temp folder not found: {temp_dir}")
     
     # 画像と音声のペアを収集
-    image_files = sorted([f for f in os.listdir(temp_dir) if f.endswith('.png')])
-    audio_files = sorted([f for f in os.listdir(temp_dir) if f.endswith('.mp3')])
+    # - 旧ファイル混在対策として、slide_* のみを対象にし、数値でソートする
+    # - slides_count が与えられたら 0..slides_count-1 に制限する
+    all_files = os.listdir(temp_dir)
+    png_files = [f for f in all_files if f.lower().endswith('.png')]
+    mp3_files = [f for f in all_files if f.lower().endswith('.mp3')]
     
-    if not image_files:
+    by_index: dict[int, List[str]] = {}
+    for f in png_files:
+        stem = Path(f).stem
+        idx = _parse_slide_index_from_stem(stem)
+        if idx is None:
+            continue
+        if slides_count is not None and idx >= int(slides_count):
+            continue
+        by_index.setdefault(idx, []).append(os.path.join(temp_dir, f))
+
+    if by_index:
+        image_indices = sorted(by_index.keys())
+        image_paths = [_pick_newest(by_index[i]) for i in image_indices]
+        legacy_mode = False
+    else:
+        # フォールバック（従来互換）: base名で mp3 を探す
+        image_files = sorted(png_files)
+        audio_files_set = set(mp3_files)
+        legacy_mode = True
+
+    if (not legacy_mode and not image_paths) or (legacy_mode and not image_files):
         raise ValueError("No image files found in temp folder")
     
-    # 原稿ファイルを読み込み（字幕用）
-    script_data = {}
-    script_path = os.path.join(os.path.dirname(output_dir), "input", "原稿.csv")
-    if not os.path.exists(script_path):
-        script_path = os.path.join(output_dir, "..", "input", "原稿.csv")
-    
-    if os.path.exists(script_path):
-        try:
-            df = None
-            for enc in ("utf-8-sig", "utf-8", "cp932", "shift_jis"):
-                try:
-                    df = pd.read_csv(script_path, encoding=enc, engine="python", keep_default_na=False)
-                    break
-                except UnicodeDecodeError:
-                    continue
-            if df is not None:
-                df.columns = [str(c).strip() for c in df.columns]
-                if "index" in df.columns and "script" in df.columns:
-                    for _, row in df.iterrows():
-                        try:
-                            idx = int(row["index"])
-                            script_data[idx] = str(row["script"])
-                        except (ValueError, TypeError):
-                            pass
-        except Exception as e:
-            print(f"Warning: Failed to read script CSV: {e}")
+    # 原稿（字幕用）
+    # - UIから原稿が送られてきた場合はそれを優先（プレビューと動画字幕の不一致を防ぐ）
+    # - 未指定の場合は input/原稿.csv を読む（後方互換）
+    script_data: dict[int, str] = {}
+    if script_data_override is not None:
+        # None でも「指定した」扱いにしてCSVへフォールバックしない
+        for k, v in dict(script_data_override).items():
+            try:
+                idx = int(k)
+            except Exception:
+                continue
+            script_data[idx] = "" if v is None else str(v)
+    else:
+        script_path = os.path.join(os.path.dirname(output_dir), "input", "原稿.csv")
+        if not os.path.exists(script_path):
+            script_path = os.path.join(output_dir, "..", "input", "原稿.csv")
+
+        if os.path.exists(script_path):
+            try:
+                script_data = _read_script_csv(script_path)
+            except Exception as e:
+                print(f"Warning: Failed to read script CSV: {e}")
     
     slides: List[_SlideItem] = []
     silence_duration = _get_silence_slide_duration()
     
-    for img_file in image_files:
-        # slide_000.png -> slide_000.mp3
-        base = os.path.splitext(img_file)[0]
-        audio_file = base + ".mp3"
-        img_path = os.path.join(temp_dir, img_file)
-        audio_path = os.path.join(temp_dir, audio_file) if audio_file in audio_files else None
-        
-        # スライドインデックスを抽出 (slide_000 -> 0)
-        try:
-            slide_index = int(base.split('_')[-1])
-        except (ValueError, IndexError):
-            slide_index = len(slides)
-        
-        # 音声の長さを取得
-        duration = silence_duration
-        if audio_path and os.path.exists(audio_path):
+    if not legacy_mode:
+        for img_path, slide_index in zip(image_paths, image_indices):
+            audio_path = _resolve_audio_path(temp_dir, slide_index)
+
+            # 音声の長さを取得
+            duration = silence_duration
+            if audio_path and os.path.exists(audio_path):
+                try:
+                    duration = _get_audio_duration_seconds(audio_path)
+                except Exception:
+                    pass
+
+            # 音声がない場合は無音MP3を生成
+            if not audio_path or not os.path.exists(audio_path):
+                audio_path = os.path.join(temp_dir, f"_silence_{slide_index:03d}.mp3")
+                _ensure_silence_mp3(audio_path, duration)
+
+            slides.append(
+                _SlideItem(
+                    page_index=slide_index,
+                    image_path=img_path,
+                    audio_path=audio_path,
+                    script_text=script_data.get(slide_index, ''),
+                    duration=duration,
+                )
+            )
+    else:
+        for img_file in image_files:
+            base = os.path.splitext(img_file)[0]
+            audio_file = base + ".mp3"
+            img_path = os.path.join(temp_dir, img_file)
+            audio_path = os.path.join(temp_dir, audio_file) if audio_file in audio_files_set else None
+
+            # スライドインデックスを抽出 (slide_000 -> 0)
             try:
-                duration = _get_audio_duration_seconds(audio_path)
-            except Exception:
-                pass
-        
-        # 音声がない場合は無音MP3を生成
-        if not audio_path or not os.path.exists(audio_path):
-            audio_path = os.path.join(temp_dir, f"_silence_{slide_index:03d}.mp3")
-            _ensure_silence_mp3(audio_path, duration)
-        
-        slides.append(_SlideItem(
-            page_index=slide_index,
-            image_path=img_path,
-            audio_path=audio_path,
-            script_text=script_data.get(slide_index, ''),
-            duration=duration
-        ))
+                slide_index = int(base.split('_')[-1])
+            except (ValueError, IndexError):
+                slide_index = len(slides)
+
+            # 音声の長さを取得
+            duration = silence_duration
+            if audio_path and os.path.exists(audio_path):
+                try:
+                    duration = _get_audio_duration_seconds(audio_path)
+                except Exception:
+                    pass
+
+            # 音声がない場合は無音MP3を生成
+            if not audio_path or not os.path.exists(audio_path):
+                audio_path = os.path.join(temp_dir, f"_silence_{slide_index:03d}.mp3")
+                _ensure_silence_mp3(audio_path, duration)
+
+            slides.append(
+                _SlideItem(
+                    page_index=slide_index,
+                    image_path=img_path,
+                    audio_path=audio_path,
+                    script_text=script_data.get(slide_index, ''),
+                    duration=duration,
+                )
+            )
     
     if not slides:
         raise ValueError("No slides to process")
     
-    output_path = os.path.join(output_dir, f"{output_name}.webm")
+    fmt = (output_format or "webm").lower().strip()
+    if fmt not in ("webm", "mp4"):
+        raise ValueError(f"Unsupported output_format: {output_format}")
+    output_path = os.path.join(output_dir, f"{output_name}.{fmt}")
     
     # 高速FFmpegでエンコード
     print(f"Generating video with FFmpeg (high-speed mode)...")
@@ -657,23 +982,16 @@ def combine_audio_video(output_dir: str, resolution: int = 1280, output_name: st
             }
             for s in slides
         ]
-        # 動画解像度を取得
+        # 動画解像度（16:9に揃える）
         video_width = resolution
-        video_height = int(resolution * 9 / 16)
-        try:
-            from PIL import Image
-            with Image.open(slides[0].image_path) as img:
-                video_width, video_height = img.size
-                if video_width > resolution:
-                    ratio = resolution / video_width
-                    video_width = resolution
-                    video_height = int(video_height * ratio)
-        except Exception:
-            pass
+        video_height = int(round(resolution * 9 / 16))
         _generate_ass_subtitle(slides_info, subtitle_path, video_width, video_height)
         print(f"Generated subtitle file: {subtitle_path}")
-    
-    _render_webm_with_ffmpeg(slides, output_path, temp_dir, subtitle_path)
+
+    if fmt == "webm":
+        _render_webm_with_ffmpeg(slides, output_path, temp_dir, subtitle_path)
+    else:
+        _render_mp4_with_ffmpeg(slides, output_path, temp_dir, subtitle_path)
     
     print(f"Video generated: {output_path}")
     return output_path
@@ -688,34 +1006,13 @@ async def process_pdf_and_script(pdf_path, script_path, output_dir):
     
     # 原稿の読み込み (CSV: index,script) - mojibake-safe
     try:
-        df = None
-        last_err = None
-        for enc in ("utf-8-sig", "utf-8", "cp932", "shift_jis"):
-            try:
-                df = pd.read_csv(
-                    script_path,
-                    encoding=enc,
-                    engine="python",  # allow newlines inside quoted cells
-                    keep_default_na=False,
-                )
-                break
-            except UnicodeDecodeError as e:
-                last_err = e
-                continue
-
-        if df is None:
-            raise last_err or ValueError("Failed to read script CSV")
-
-        df.columns = [str(c).strip() for c in df.columns]
-        if "index" not in df.columns or "script" not in df.columns:
-            raise ValueError("Script CSV must have columns: index, script")
-
-        df["index"] = pd.to_numeric(df["index"], errors="coerce")
+        script_data = _read_script_csv(script_path)
     except Exception as e:
         print(f"Error reading script CSV ({script_path}): {e}")
         return
 
-    # PDFの読み込み
+    # PDFの読み込み（fitzは遅延import）
+    import fitz  # pymupdf
     doc = fitz.open(pdf_path)
     
     temp_dir = os.path.join(output_dir, "temp", base_name)
@@ -740,10 +1037,7 @@ async def process_pdf_and_script(pdf_path, script_path, output_dir):
                 pix.save(image_path)
 
             # 原稿の取得
-            script_text = ""
-            script_row = df.loc[df["index"] == i, "script"]
-            if not script_row.empty:
-                script_text = str(script_row.iloc[0])
+            script_text = script_data.get(i, "")
 
             # 音声生成
             audio_path = os.path.join(temp_dir, f"audio_{i}.mp3")
@@ -789,6 +1083,8 @@ async def process_pdf_and_script(pdf_path, script_path, output_dir):
             _render_webm_with_ffmpeg(slides, video_output_path, temp_dir)
         else:
             # フォールバック: MoviePy（遅い）
+            from moviepy.editor import AudioFileClip, ImageClip, concatenate_videoclips
+
             for slide in slides:
                 img_clip = ImageClip(slide.image_path).set_duration(slide.duration)
                 if slide.audio_path and os.path.exists(slide.audio_path):

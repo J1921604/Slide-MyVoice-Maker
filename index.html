@@ -8,6 +8,7 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://unpkg.com/pptxgenjs/dist/pptxgen.bundle.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -107,8 +108,10 @@
             }, [audioRef, currentSlide, subtitleSegments]);
             
             return (
-                <div className="w-full h-[80px] bg-[#1a1a2e] border-t border-white/5 flex items-center justify-center px-8 transition-colors duration-300 flex-shrink-0">
-                    <div className="text-white text-lg md:text-2xl font-bold text-center leading-relaxed">{currentSubtitle}</div>
+                <div className="w-full h-[56px] bg-transparent border-t border-white/5 flex items-end justify-center px-4 pb-2 transition-colors duration-300 flex-shrink-0">
+                    <div className="max-w-[min(92vw,56rem)] px-4 py-2 rounded-md bg-slate-700/50 backdrop-blur-sm text-white text-base md:text-lg font-bold text-center leading-snug shadow-xl">
+                        {currentSubtitle}
+                    </div>
                 </div>
             );
         };
@@ -129,6 +132,7 @@
             const [selectedResolution, setSelectedResolution] = useState('720p');
             const [playbackRate, setPlaybackRate] = useState(1.0);
             const [subtitleEnabled, setSubtitleEnabled] = useState(true);  // 字幕ON/OFF
+            const [videoFormat, setVideoFormat] = useState('webm'); // webm / mp4
 
             // Local backend state
             const [localBackendAvailable, setLocalBackendAvailable] = useState(false);
@@ -138,9 +142,9 @@
             
             // 解像度マッピング
             const RESOLUTION_OPTIONS = [
-                { label: '720p (1280x720)', value: '720p', width: 1280, height: 720 },
-                { label: '1080p (1920x1080)', value: '1080p', width: 1920, height: 1080 },
-                { label: '1440p (2560x1440)', value: '1440p', width: 2560, height: 1440 },
+                { label: '1280x720', value: '720p', width: 1280, height: 720 },
+                { label: '1920x1080', value: '1080p', width: 1920, height: 1080 },
+                { label: '2560x1440', value: '1440p', width: 2560, height: 1440 },
             ];
             
             const audioRef = useRef(null);
@@ -151,7 +155,9 @@
                 if (!localBackendAvailable) return;
                 try {
                     const list = await fetchJson('/api/list_outputs', {}, 4000);
-                    const files = (list && list.webm) ? list.webm : [];
+                    const webm = (list && list.webm) ? list.webm : [];
+                    const mp4 = (list && list.mp4) ? list.mp4 : [];
+                    const files = [...webm, ...mp4].sort();
                     setOutputFiles(files);
                     if (!selectedOutputName && files.length > 0) {
                         setSelectedOutputName(files[files.length - 1]);
@@ -161,10 +167,17 @@
                 }
             };
 
-            const downloadSelectedWebm = () => {
+            const shortenOutputLabel = (name) => {
+                if (!name) return '';
+                const base = String(name).replace(/\.(webm|mp4)$/i, '');
+                if (base.length <= 24) return base;
+                return `${base.slice(0, 12)}…${base.slice(-8)}`;
+            };
+
+            const downloadSelectedVideo = () => {
                 if (!localBackendAvailable) return;
                 if (!selectedOutputName) {
-                    setStatusMessage('ダウンロードするWebMを選択してください');
+                    setStatusMessage('ダウンロードする動画（WebM/MP4）を選択してください');
                     return;
                 }
                 const a = document.createElement('a');
@@ -174,6 +187,47 @@
                 document.body.appendChild(a);
                 a.click();
                 a.remove();
+            };
+
+            // PPTX出力（ブラウザで生成してダウンロード）
+            const exportPptx = async () => {
+                if (slides.length === 0) {
+                    setStatusMessage('スライドがありません');
+                    return;
+                }
+                const pdfBaseName = savedPdfName ? savedPdfName.replace(/\.pdf$/i, '') : 'slides';
+
+                const PptxGenJS = window.PptxGenJS;
+                if (!PptxGenJS) {
+                    setStatusMessage('PPTXライブラリが読み込まれていません（PptxGenJS）');
+                    return;
+                }
+
+                try {
+                    setStatusMessage('PPTXを書き出し中...');
+                    const pptx = new PptxGenJS();
+                    pptx.layout = 'LAYOUT_WIDE';
+
+                    // 16:9 (13.333 x 7.5)
+                    const W = 13.333;
+                    const H = 7.5;
+
+                    slides.forEach((s, i) => {
+                        const slide = pptx.addSlide();
+                        if (s && s.image) {
+                            slide.addImage({ data: s.image, x: 0, y: 0, w: W, h: H });
+                        }
+                        const note = (s && s.script) ? String(s.script) : '';
+                        if (note) {
+                            slide.addNotes(note);
+                        }
+                    });
+
+                    await pptx.writeFile({ fileName: `${pdfBaseName}.pptx` });
+                    setStatusMessage(`PPTX出力完了: ${pdfBaseName}.pptx`);
+                } catch (e) {
+                    setStatusMessage(`PPTX出力失敗: ${e.message}`);
+                }
             };
 
             // 原稿CSV出力
@@ -424,15 +478,27 @@
                     return;
                 }
 
+                // PDFファイル名から拡張子を除いた名前を取得（tempスコープ）
+                const pdfBaseName = savedPdfName ? savedPdfName.replace(/\.pdf$/i, '') : 'output';
+
                 setIsGeneratingAudio(true);
                 setStatusMessage('全スライドの音声生成中...');
                 try {
+                    // 要件: 画像・音声生成ボタン実行で output/temp 内の全ファイルを削除し上書き更新
+                    setStatusMessage('output/temp をクリア中...');
+                    await fetchJson('/api/clear_temp', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    }, 30000);
+
                     // 全スライドの音声を生成（画像も送信）
                     for (let i = 0; i < slides.length; i++) {
                         const slide = slides[i];
                         setStatusMessage(`音声生成中... (${i + 1}/${slides.length})`);
                         
                         const body = JSON.stringify({ 
+                            output_name: pdfBaseName,
                             slide_index: i, 
                             script: slide.script || '',
                             image_data: slide.image,
@@ -481,7 +547,9 @@
                 setStatusMessage(`スライド ${slideIndex + 1} の音声生成中...`);
 
                 try {
+                    const pdfBaseName = savedPdfName ? savedPdfName.replace(/\.pdf$/i, '') : 'output';
                     const body = JSON.stringify({ 
+                        output_name: pdfBaseName,
                         slide_index: slideIndex, 
                         script: slide.script,
                         image_data: slide.image,
@@ -529,7 +597,10 @@
                     const body = JSON.stringify({ 
                         resolution: selectedResolution,
                         output_name: pdfBaseName,
-                        subtitle: subtitleEnabled
+                        subtitle: subtitleEnabled,
+                        format: videoFormat,
+                        slides_count: slides.length,
+                        scripts: slides.map((s, i) => ({ index: i, script: s?.script || '' }))
                     });
                     const res = await fetchJson('/api/generate_video', { 
                         method: 'POST', 
@@ -538,17 +609,20 @@
                     }, 600000);
                     
                     const list = await fetchJson('/api/list_outputs', {}, 4000);
-                    const files = (list && list.webm) ? list.webm : [];
+                    const webm = (list && list.webm) ? list.webm : [];
+                    const mp4 = (list && list.mp4) ? list.mp4 : [];
+                    const files = [...webm, ...mp4].sort();
                     setOutputFiles(files);
 
-                    const preferred = res && res.webm ? res.webm : '';
+                    const preferred = (res && (res.filename || res.webm || res.mp4)) ? (res.filename || res.webm || res.mp4) : '';
                     if (preferred && files.includes(preferred)) {
                         setSelectedOutputName(preferred);
                     } else if (files.length > 0) {
                         setSelectedOutputName(files[files.length - 1]);
                     }
 
-                    setStatusMessage(`動画生成完了。output/${pdfBaseName}.webm に保存しました。`);
+                    const ext = (videoFormat || 'webm').toLowerCase();
+                    setStatusMessage(`動画生成完了。output/${pdfBaseName}.${ext} に保存しました。`);
                 } catch (e) {
                     setStatusMessage(`動画生成失敗: ${e.message}`);
                 } finally {
@@ -622,22 +696,22 @@
                 <div className="h-screen bg-slate-950 text-slate-200 flex flex-col overflow-hidden">
                     
                     {/* Header */}
-                    <header className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-6 z-20">
-                        <div className="flex items-center gap-3">
+                    <header className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-6 z-20 whitespace-nowrap">
+                        <div className="flex items-center gap-3 flex-nowrap min-w-0">
                             <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-lg flex items-center justify-center">
                                 <Video />
                             </div>
-                            <h1 className="font-bold text-lg">Slide Voice Maker</h1>
+                            <h1 className="font-bold text-2xl">Slide Voice Maker</h1>
                             <button onClick={() => setShowHelp(true)} className="ml-2 text-slate-400 hover:text-white">
                                 <HelpCircle />
                             </button>
                         </div>
                         
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 flex-nowrap overflow-x-auto">
                             {/* 原稿CSV入力ボタン */}
                             <button
                                 onClick={() => csvInputRef.current?.click()}
-                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10"
                                 title="原稿.csv入力"
                             >
                                 <FileText /> 原稿CSV入力
@@ -650,35 +724,19 @@
                             <select
                                 value={selectedResolution}
                                 onChange={(e) => setSelectedResolution(e.target.value)}
-                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10 cursor-pointer"
+                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 cursor-pointer"
                                 title="画像解像度"
                             >
                                 {RESOLUTION_OPTIONS.map(opt => (
                                     <option key={opt.value} value={opt.value}>{opt.label}</option>
                                 ))}
                             </select>
-                            
-                            {/* 再生速度選択 */}
-                            <select
-                                value={playbackRate}
-                                onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
-                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10 cursor-pointer"
-                                title="再生速度"
-                            >
-                                <option value="0.5">0.5x</option>
-                                <option value="0.75">0.75x</option>
-                                <option value="1">1.0x</option>
-                                <option value="1.25">1.25x</option>
-                                <option value="1.5">1.5x</option>
-                                <option value="1.75">1.75x</option>
-                                <option value="2">2.0x</option>
-                            </select>
 
                             {/* 画像・音声生成ボタン */}
                             <button
                                 onClick={generateAllAudio}
                                 disabled={isGeneratingAudio || !localBackendAvailable}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
                                     isGeneratingAudio 
                                         ? 'bg-slate-800 text-slate-400 cursor-wait' 
                                         : localBackendAvailable
@@ -712,11 +770,22 @@
                                 </button>
                             </div>
 
+                            {/* 出力形式（WebM/MP4） */}
+                            <select
+                                value={videoFormat}
+                                onChange={(e) => setVideoFormat(e.target.value)}
+                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 cursor-pointer"
+                                title="動画の出力形式: WebM=軽量・高速 / MP4=互換性重視"
+                            >
+                                <option value="webm">WebM</option>
+                                <option value="mp4">MP4</option>
+                            </select>
+
                             {/* 動画生成ボタン */}
                             <button
                                 onClick={generateVideo}
                                 disabled={isGeneratingVideo || !localBackendAvailable}
-                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all ${
+                                className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
                                     isGeneratingVideo 
                                         ? 'bg-slate-800 text-slate-400 cursor-wait' 
                                         : localBackendAvailable
@@ -737,34 +806,44 @@
                             {/* 原稿CSV出力ボタン */}
                             <button
                                 onClick={downloadCsv}
-                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10"
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10"
                                 title="編集した原稿をCSVでダウンロード"
                             >
                                 <Download /> 原稿CSV出力
                             </button>
 
-                            {/* 動画WebM出力ボタン */}
+                            {/* PPTX出力ボタン */}
+                            <button
+                                onClick={exportPptx}
+                                disabled={slides.length === 0}
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 disabled:opacity-50"
+                                title="現在のスライド画像をPPTXとしてダウンロード（ブラウザ生成）"
+                            >
+                                <Download /> PPTX出力
+                            </button>
+
+                            {/* 動画出力（WebM/MP4） */}
                             {localBackendAvailable && (
                                 <>
                                     <select
                                         value={selectedOutputName}
                                         onChange={(e) => setSelectedOutputName(e.target.value)}
                                         onFocus={refreshOutputFiles}
-                                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm border border-white/10 cursor-pointer"
-                                        title="output/ にあるWebMを選択"
+                                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 cursor-pointer"
+                                        title={selectedOutputName ? `選択中: ${selectedOutputName}` : 'output/ にある動画（WebM/MP4）を選択'}
                                     >
-                                        <option value="">(output/*.webm を選択)</option>
+                                        <option value="">(動画を選択)</option>
                                         {outputFiles.map(n => (
-                                            <option key={n} value={n}>{n}</option>
+                                            <option key={n} value={n}>{shortenOutputLabel(n)}</option>
                                         ))}
                                     </select>
                                     <button
-                                        onClick={downloadSelectedWebm}
+                                        onClick={downloadSelectedVideo}
                                         disabled={!selectedOutputName}
-                                        className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-lg text-sm disabled:opacity-50"
-                                        title="選択したWebMをダウンロード"
+                                        className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-lg text-sm whitespace-nowrap disabled:opacity-50"
+                                        title="選択した動画（WebM/MP4）をダウンロード"
                                     >
-                                        <Download /> 動画WebM出力
+                                        <Download /> 動画出力
                                     </button>
                                 </>
                             )}
@@ -859,31 +938,57 @@
                             <div className="flex-1 flex flex-col min-h-0">
                                 <div className="flex-1 bg-slate-950 relative flex items-center justify-center p-4">
                                     <div className="relative w-full h-full max-w-5xl flex flex-col items-center justify-center group">
-                                        <div className="relative shadow-2xl rounded-lg overflow-hidden border border-slate-800 bg-black flex-shrink-1 min-h-0">
-                                            <img src={activeSlide?.image} className="max-w-full max-h-[calc(100vh-400px)] object-contain mx-auto" alt="Slide Preview" />
-                                            <audio 
-                                                ref={audioRef} 
-                                                src={activeSlide?.audio || ""} 
-                                                onLoadedMetadata={() => { if(audioRef.current) audioRef.current.playbackRate = playbackRate; }}
-                                                onPlay={() => setIsPlaying(true)} 
-                                                onPause={() => setIsPlaying(false)} 
-                                                onEnded={() => { setIsPlaying(false); if(audioRef.current) audioRef.current.currentTime = 0; }} 
-                                            />
-                                            {activeSlide?.audio && (
-                                                <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${isPlaying ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}>
-                                                    <button
-                                                        onClick={() => {
-                                                            const audio = audioRef.current;
-                                                            if (!audio) return;
-                                                            if (isPlaying) audio.pause();
-                                                            else audio.play().catch(() => {});
-                                                        }}
-                                                        className="w-16 h-16 bg-violet-600/90 hover:bg-violet-500 text-white rounded-full flex items-center justify-center shadow-xl backdrop-blur-sm transition-transform hover:scale-105"
+                                        <div className="shadow-2xl rounded-lg border border-slate-800 bg-black flex flex-col flex-shrink-1 min-h-0">
+                                            {/* 画像 + 再生ボタンは相対配置コンテナ内にまとめる */}
+                                            <div className="relative rounded-lg overflow-hidden">
+                                                <img src={activeSlide?.image} className="max-w-full max-h-[calc(100vh-440px)] object-contain mx-auto" alt="Slide Preview" />
+                                                <audio 
+                                                    ref={audioRef} 
+                                                    src={activeSlide?.audio || ""} 
+                                                    onLoadedMetadata={() => { if(audioRef.current) audioRef.current.playbackRate = playbackRate; }}
+                                                    onPlay={() => setIsPlaying(true)} 
+                                                    onPause={() => setIsPlaying(false)} 
+                                                    onEnded={() => { setIsPlaying(false); if(audioRef.current) audioRef.current.currentTime = 0; }} 
+                                                />
+                                                {activeSlide?.audio && (
+                                                    <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-300 ${isPlaying ? 'opacity-0 group-hover:opacity-100' : 'opacity-100'}`}>
+                                                        <button
+                                                            onClick={() => {
+                                                                const audio = audioRef.current;
+                                                                if (!audio) return;
+                                                                if (isPlaying) audio.pause();
+                                                                else audio.play().catch(() => {});
+                                                            }}
+                                                            className="w-16 h-16 bg-violet-600/90 hover:bg-violet-500 text-white rounded-full flex items-center justify-center shadow-xl backdrop-blur-sm transition-transform hover:scale-105"
+                                                        >
+                                                            {isPlaying ? <Square /> : <Play />}
+                                                        </button>
+                                                    </div>
+                                                )}
+                                            </div>
+
+                                            {/* SLIDE番号 / 再生速度（画像に重ならないよう、画像の下に配置） */}
+                                            <div className="mx-3 my-3 flex items-center justify-center gap-3 px-3 py-2 rounded-md bg-slate-900/70 border border-white/10 text-sm font-mono text-slate-100 backdrop-blur-sm">
+                                                <span>SLIDE {String(activeSlideIndex + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</span>
+                                                <div className="h-4 w-px bg-white/15" />
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-slate-200">速度</span>
+                                                    <select
+                                                        value={playbackRate}
+                                                        onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
+                                                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-sm whitespace-nowrap border border-white/10 cursor-pointer"
+                                                        title="再生速度"
                                                     >
-                                                        {isPlaying ? <Square /> : <Play />}
-                                                    </button>
+                                                        <option value="0.5">0.5x</option>
+                                                        <option value="0.75">0.75x</option>
+                                                        <option value="1">1.0x</option>
+                                                        <option value="1.25">1.25x</option>
+                                                        <option value="1.5">1.5x</option>
+                                                        <option value="1.75">1.75x</option>
+                                                        <option value="2">2.0x</option>
+                                                    </select>
                                                 </div>
-                                            )}
+                                            </div>
                                         </div>
                                     </div>
                                     
@@ -907,27 +1012,6 @@
                                 </div>
                                 
                                 <PlayerOverlay currentSlide={activeSlide} audioRef={audioRef} isPlaying={isPlaying} />
-                                
-                                <div className="h-8 bg-slate-900 border-t border-b border-white/5 flex items-center justify-center gap-4 text-xs text-slate-500 font-mono">
-                                    <span>SLIDE {String(activeSlideIndex + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</span>
-                                    <div className="h-4 w-px bg-white/10" />
-                                    <div className="flex items-center gap-2">
-                                        <span>再生速度:</span>
-                                        <select
-                                            value={playbackRate}
-                                            onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
-                                            className="px-2 py-0.5 bg-slate-800 hover:bg-slate-700 text-white rounded text-xs border border-white/10 cursor-pointer"
-                                        >
-                                            <option value="0.5">0.5x</option>
-                                            <option value="0.75">0.75x</option>
-                                            <option value="1">1.0x</option>
-                                            <option value="1.25">1.25x</option>
-                                            <option value="1.5">1.5x</option>
-                                            <option value="1.75">1.75x</option>
-                                            <option value="2">2.0x</option>
-                                        </select>
-                                    </div>
-                                </div>
                             </div>
                             
                             {/* Script Editor */}
@@ -968,15 +1052,15 @@
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
                                         <h4 className="font-bold text-violet-400 mb-2">[STEP 3] 画像・音声生成</h4>
                                         <p className="text-sm text-slate-300">「画像・音声生成」ボタンで全スライドの画像・音声を一括生成します。output/tempフォルダに音声(mp3)と画像(png)が保存されます。</p>
-                                        <p className="text-xs text-slate-400 mt-2">各スライドの「画像・音声」ボタンで個別に生成も可能です。ヘッダの再生速度で全スライドの再生速度を調整できます。</p>
+                                        <p className="text-xs text-slate-400 mt-2">各スライドの「画像・音声」ボタンで個別に生成も可能です。プレビュー上の「速度」で全スライドの再生速度を調整できます。</p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
                                         <h4 className="font-bold text-violet-400 mb-2">[STEP 4] 動画生成</h4>
-                                        <p className="text-sm text-slate-300">「動画生成」ボタンでoutput/tempの音声・画像から動画(WebM)を生成します。PDFと同名でoutputフォルダに保存されます。</p>
+                                        <p className="text-sm text-slate-300">「動画生成」ボタンでoutput/tempの音声・画像から動画（WebM/MP4）を生成します。PDFと同名でoutputフォルダに保存されます。</p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
                                         <h4 className="font-bold text-violet-400 mb-2">[STEP 5] ダウンロード</h4>
-                                        <p className="text-sm text-slate-300">「原稿CSV出力」で編集した原稿をダウンロード。「動画WebM出力」で生成した動画をダウンロードできます。</p>
+                                        <p className="text-sm text-slate-300">「原稿CSV出力」で編集した原稿をダウンロード。「動画出力」で生成した動画（WebM/MP4）をダウンロードできます。</p>
                                     </div>
                                 </div>
                                 <div className="p-4 bg-slate-950 border-t border-white/5 flex justify-end">
