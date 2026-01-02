@@ -9,7 +9,9 @@ python-multipart
 Pillow
 requests
 pytest
-TTS
+coqui-tts
+sounddevice
+scipy
+numpy
 torch
 torchaudio
-
