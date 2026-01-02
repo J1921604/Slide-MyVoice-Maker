@@ -37,13 +37,13 @@ py -3.10 -m pip install -r requirements.txt
 **Windows バッチ**:
 
 ```batch
-run.bat
+.\start.ps1
 ```
 
 **PowerShell**:
 
 ```powershell
-.\run.ps1
+.\start.ps1
 ```
 
 ### コマンドライン実行
@@ -143,7 +143,7 @@ py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
 5. 字幕ON/OFFを選択（動画に字幕を埋め込むかどうか）
 6. 「画像・音声生成」ボタンをクリック（output/tempに保存）
 7. 「動画生成」ボタンをクリック（output/に保存）
-8. 「動画WebM出力」ボタンで動画ダウンロード
+8. 「動画出力」ボタンで動画ダウンロード
 
 ## 環境変数
 

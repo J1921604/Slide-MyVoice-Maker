@@ -94,7 +94,7 @@
 - YAGNI（You Aren't Gonna Need It）原則に従う
 - 複雑なパターンの導入には明確な理由を文書化する
 - 既存コードの重複削除より、明確性を優先する
-- ワンクリック実行（run.bat/run.ps1）の利便性を維持する
+- ワンクリック実行（.\start.ps1）の利便性を維持する
 
 **根拠**: シンプルな設計は理解しやすく、バグが少なく、保守が容易である。
 
@@ -146,7 +146,7 @@ flowchart TD
 **必須のE2E**:
 
 - CLI: `py -3.10 src\main.py` を起点に、PDF→WebM生成が成功すること
-- Web: `index.html` で PDF/原稿CSV→音声生成→WebM出力が **空ファイルにならない**こと
+- Web: `index.html` で PDF/原稿CSV→画像・音声生成→動画生成→動画出力が **空ファイルにならない**こと
 
 ### レビュー要件
 
@@ -206,12 +206,12 @@ flowchart LR
 
 ### 推奨構文
 
-| 用途 | 推奨構文 |
-|------|----------|
-| ブランチ戦略 | flowchart TB + subgraph |
-| プロセスフロー | flowchart TD/LR |
-| 時系列 | sequenceDiagram |
-| 状態遷移 | stateDiagram-v2 |
+| 用途           | 推奨構文                |
+| -------------- | ----------------------- |
+| ブランチ戦略   | flowchart TB + subgraph |
+| プロセスフロー | flowchart TD/LR         |
+| 時系列         | sequenceDiagram         |
+| 状態遷移       | stateDiagram-v2         |
 
 ### 日本語対応
 
