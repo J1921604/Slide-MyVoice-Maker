@@ -108,11 +108,11 @@ def _get_output_max_width() -> int:
 
 
 def _get_output_fps() -> int:
-    """静止画ベースのため低fpsでも破綻しにくい。速度優先で既定15fps。"""
+    """静止画ベースの動画。字幕切り替わりを確実にするため30fps推奨。"""
     try:
-        return int(os.environ.get("OUTPUT_FPS", "15"))
+        return int(os.environ.get("OUTPUT_FPS", "30"))
     except Exception:
-        return 15
+        return 30
 
 
 def _get_vp9_cpu_used() -> int:
@@ -296,7 +296,7 @@ def _render_webm_with_ffmpeg(
     cpu_used = _get_vp9_cpu_used()
     crf = _get_vp9_crf()
     use_vp8 = _get_use_vp8()
-    threads = str(min(os.cpu_count() or 4, 8))
+    threads = str(os.cpu_count() or 4)
 
     video_list = os.path.join(temp_dir, "__video_concat.txt")
     audio_list = os.path.join(temp_dir, "__audio_concat.txt")
@@ -460,7 +460,7 @@ def _render_mp4_with_ffmpeg(
     ffmpeg = imageio_ffmpeg.get_ffmpeg_exe()
     fps = _get_output_fps()
     max_w = _get_output_max_width()
-    threads = str(min(os.cpu_count() or 4, 8))
+    threads = str(os.cpu_count() or 4)
 
     video_list = os.path.join(temp_dir, "__video_concat.txt")
     audio_list = os.path.join(temp_dir, "__audio_concat.txt")
@@ -552,7 +552,7 @@ def _embed_subtitles(input_path: str, subtitle_path: str, output_path: str) -> N
     cpu_used = _get_vp9_cpu_used()
     crf = _get_vp9_crf()
     use_vp8 = _get_use_vp8()
-    threads = str(min(os.cpu_count() or 4, 8))
+    threads = str(os.cpu_count() or 4)
     
     # Windows用にパスをエスケープ
     escaped_path = subtitle_path.replace('\\', '/').replace(':', '\\:')
@@ -757,7 +757,12 @@ def _get_subtitle_segments(script: str) -> List[dict]:
 
 
 def _generate_ass_subtitle(slides_info: List[dict], output_path: str, video_width: int, video_height: int) -> None:
-    """ASS形式の字幕ファイルを生成する（プレビューと同じセグメント分割方式）"""
+    """ASS形式の字幕ファイルを生成する（プレビューと同じセグメント分割方式）。
+
+    - 文字数比率でタイミングを決める
+    - YouTube風の半透明ダーク背景・太字白文字
+    - セグメントの長さが0にならないよう最小幅を確保
+    """
     # ASS header
     # 環境変数で字幕縦マージンと配置を調整可能にする
     try:
@@ -783,7 +788,8 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Noto Sans JP,34,&H00FFFFFF,&H000000FF,&H00000000,&H90040404,-1,0,0,0,100,100,0,0,3,2,0,{env_alignment},30,30,{env_margin_v},1
+# PrimaryColour: 白, OutlineColour: 黒, BackColour: 半透明グレー
+Style: Default,Noto Sans JP,36,&H00FFFFFF,&H00FFFFFF,&H00000000,&H80303030,-1,0,0,0,100,100,0,0,3,2,0,{env_alignment},30,30,{env_margin_v},1
 
 
 [Events]
@@ -800,6 +806,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     events = []
     current_time = 0.0
     
+    min_seg = 0.15  # 秒換算の最小幅（30fpsで約4.5フレーム、字幕切替を確実にする）
+
     for slide in slides_info:
         script = slide.get('script', '').strip()
         duration = slide.get('duration', 3.0)
@@ -812,6 +820,8 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
                 # 文字数比率からタイミングを計算
                 seg_start = current_time + (duration * seg['start_ratio'])
                 seg_end = current_time + (duration * seg['end_ratio'])
+                if seg_end - seg_start < min_seg:
+                    seg_end = seg_start + min_seg
                 
                 # テキストをASS用にエスケープ
                 text = seg['text'].replace('\n', '\\N')

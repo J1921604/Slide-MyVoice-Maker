@@ -20,13 +20,13 @@ gantt
     title 実装スケジュール
     dateFormat YYYY-MM-DD
     axisFormat %m/%d
-    excludes weekends, 2025-12-27, 2025-12-28, 2025-12-29, 2025-12-30, 2025-12-31, 2026-01-01, 2026-01-02, 2026-01-03, 2026-01-04
+    excludes weekends,2025-12-27,2025-12-28,2025-12-29,2025-12-30,2025-12-31,2026-01-01,2026-01-02,2026-01-03,2026-01-04
 
     section Phase 1 Setup
-    T001-T003 プロジェクト準備                :done, p1, 2026-01-05, 1d
+    T001-T003 プロジェクト準備                :done, p1, 2026-01-05, 2d
 
     section Phase 2 Foundational
-    T004-T006 CLI基盤（解像度/env）            :done, p2, after p1, 1d
+    T004-T006 CLI基盤（解像度/env）            :done, p2, after p1, 2d
 
     section Phase 3 CLI Features
     T007-T010 解像度選択                       :done, p3, after p2, 1d
@@ -35,7 +35,7 @@ gantt
     T011-T014 temp上書き                       :done, p4, after p3, 1d
 
     section Phase 5 Web UI
-    T015-T018 Web UI（サーバー連携）            :done, p5, after p4, 1d
+    T015-T018 Web UI（サーバー連携/字幕/MP4）   :done, p5, after p4, 2d
 
     section Phase 6 Tests
     T019-T020 E2Eテスト実行                    :done, p6, after p5, 1d

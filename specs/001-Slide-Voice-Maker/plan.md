@@ -10,14 +10,17 @@
 
 1. **出力動画の解像度選択機能**: 720p/1080p/1440pから選択可能
 2. **temp上書き更新機能**: 毎回のビルド時にtempフォルダをクリア
-3. **字幕ON/OFF機能**: 動画に字幕を埋め込むかどうかを選択可能
+3. **字幕ON/OFF機能**: 動画に字幕を埋め込むかどうかを選択可能（句読点分割+文字数比率）
+4. **動画形式選択**: WebM/MP4を選択可能
+5. **PPTX出力**: ブラウザ上のスライドをPPTXとして出力
 
 加えて、運用上の要件として以下も満たす:
 
 - PDFアップロードでinput/に保存、原稿CSV入力でinput/原稿.csv上書き、音声生成でEdge TTS実行、output/にwebm出力
-- **Web UIはサーバー連携のみ**
-- **Web UIホーム画面はPDFアップロードのみ**（CSV出力等は表示しない）
+- **Web UIはサーバー連携のみ（静的配信はGitHub Pages、APIはローカル）**
+- **ホーム画面ヘッダーでPDFを常時アップロード**
 - **PDFアップロード後の画面では原稿CSV入力を維持**（文字化け対処のため）
+- **動画形式（WebM/MP4）とPPTX出力を提供**
 - 変更内容を **E2Eテストへ反映**し、検証可能にする
 
 ## 技術コンテキスト
@@ -67,7 +70,7 @@ specs/001-Slide-Voice-Maker/
 
 ```text
 Slide-Voice-Maker/
-├── index.html           # Web UI（サーバー連携）
+├── index.html           # Web UI（サーバー連携、GitHub Pages静的配信）
 ├── start.ps1            # ワンクリック起動スクリプト
 ├── requirements.txt     # Python依存パッケージ
 ├── preview.bat          # プレビュー起動
@@ -75,7 +78,7 @@ Slide-Voice-Maker/
 │   ├── *.pdf            # 入力PDFファイル
 │   └── 原稿.csv         # ナレーション原稿
 ├── output/
-│   ├── *.webm           # 生成された動画
+│   ├── *.webm / *.mp4   # 生成された動画
 │   └── temp/            # 一時ファイル（自動クリア対象）
 ├── src/
 │   ├── main.py          # CLIエントリポイント

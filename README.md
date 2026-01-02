@@ -10,11 +10,12 @@ PDFスライドと原稿CSVから、AI音声ナレーション付き動画（Web
 
 ```mermaid
 flowchart LR
-    A[PDF] --> B[Slide Voice Maker]
-    C[原稿CSV] --> B
-    B --> D[WebM動画]
-    B --> E[音声MP3]
-    B --> F[スライド画像PNG]
+    A[PDFアップロード] --> B[スライド展開]
+    C[原稿CSV入力] --> B
+    B --> D[画像・音声生成<br/>output/temp]
+    D --> E[動画生成<br/>WebM/MP4]
+    E --> F[ダウンロード]
+    B --> G[PPTX出力]
 ```
 
 ### 主要機能
@@ -27,9 +28,10 @@ flowchart LR
 | **再生速度** | 0.5x〜2.0xで音声再生速度を調整 |
 | **字幕ON/OFF** | 動画に字幕を埋め込むかどうかを選択 |
 | **画像・音声生成** | Edge TTSでAI音声を生成、output/tempに画像・音声を保存 |
-| **動画生成** | output/tempから動画webmを生成（PDFと同名で保存） |
+| **動画生成** | output/tempから動画WebM/MP4を生成（PDFと同名で保存） |
 | **原稿CSV出力** | 編集した原稿をCSVでダウンロード |
-| **動画WebM出力** | outputフォルダから選択したwebmをダウンロード |
+| **動画出力** | outputフォルダから選択したWebM/MP4をダウンロード |
+| **PPTX出力** | ブラウザ上でスライド画像をPPTX化してダウンロード |
 
 ## 🚀 クイックスタート
 
@@ -65,12 +67,12 @@ http://127.0.0.1:8000
 
 ### 4. 動画生成手順
 
-1. **PDFアップロード**: プレゼンテーションPDFをアップロード
-2. **原稿CSV読み込み**: 「index,script」形式のCSVを読み込み（input/原稿.csvに保存）
-3. **解像度選択**: 720p/1080p/1440pを選択（画像解像度）
-4. **画像・音声生成**: 「画像・音声生成」ボタンをクリック（output/tempに保存）
-5. **動画生成**: 「動画生成」ボタンをクリック（output/にPDFと同名で保存）
-6. **動画ダウンロード**: 「動画WebM出力」でダウンロード
+1. **PDFアップロード**: 「PDF入力」でPDFをアップロード（input/にも保存）
+2. **原稿CSV読み込み**: 「原稿CSV入力」でCSVを読み込み、毎回input/原稿.csvに上書き保存
+3. **解像度/字幕/形式選択**: 720p/1080p/1440p・字幕ON/OFF・WebM/MP4を選択
+4. **画像・音声生成**: 「画像・音声生成」でoutput/tempをクリアし素材を再生成
+5. **動画生成**: 「動画生成」でoutput/にPDF同名のWebM/MP4を出力
+6. **ダウンロード**: 「動画出力」で保存済みWebM/MP4をダウンロード、「原稿CSV出力」「PPTX出力」も利用可
 
 ### CLIで直接実行
 
@@ -103,7 +105,7 @@ py -3.10 src\main.py --input input --output output --script input\原稿.csv --r
 
 ```
 Slide-Voice-Maker/
-├── index.html          # WebアプリUI
+├── index.html          # WebアプリUI（GitHub Pages静的配信対応）
 ├── start.ps1           # ワンクリック起動スクリプト
 ├── requirements.txt    # Python依存パッケージ
 ├── pytest.ini          # pytest設定
@@ -111,7 +113,7 @@ Slide-Voice-Maker/
 │   ├── *.pdf           # 入力PDFファイル
 │   └── 原稿.csv        # ナレーション原稿
 ├── output/
-│   ├── *.webm          # 生成された動画
+│   ├── *.webm          # 生成された動画（MP4も対応）
 │   └── temp/           # 一時ファイル（自動クリア）
 ├── src/
 │   ├── main.py         # CLIエントリポイント
@@ -145,15 +147,17 @@ index,script
 | `USE_VP8` | `1` | VP8使用（高速）。`0`でVP9（高品質）。 |
 | `VP9_CPU_USED` | `8` | エンコード速度（0-8、大きいほど高速） |
 | `VP9_CRF` | `40` | 品質（大きいほど低品質・高速） |
-| `OUTPUT_FPS` | `15` | 出力FPS |
+| `OUTPUT_FPS` | `30` | 出力FPS（字幕切り替わり確保のため30fps推奨） |
 | `OUTPUT_MAX_WIDTH` | `1280` | 出力最大幅（px） |
 | `SLIDE_RENDER_SCALE` | `1.5` | PDF→画像の解像度倍率 |
 | `SILENCE_SLIDE_DURATION` | `5` | 原稿なしスライドの表示秒数 |
+| `SUBTITLE_MARGIN_V` | `10` | 字幕の縦マージン（下寄せ調整） |
+| `SUBTITLE_ALIGNMENT` | `2` | 字幕配置（2=bottom-center） |
 
 ## ✅ テスト
 
 ```bash
-# E2Eテスト（解像度・非空WebM）
+# E2Eテスト（解像度・非空WebM/MP4）
 py -3.10 -m pytest -m e2e -v
 
 # バックエンドE2Eテスト
@@ -165,7 +169,14 @@ py -3.10 -m pytest tests/e2e/test_resolution.py -v
 
 ## 📊 パフォーマンス改善
 
-動画生成が遅い場合：
+### 最新の最適化（1.0.0）
+
+- **FPS 30fps**: 字幕切り替わりを確実にするため30fpsに変更（従来15fps）
+- **全CPUコア活用**: FFmpegスレッド数の制限を解除し、全コア並列処理
+- **字幕最小セグメント時間**: 0.15秒に設定し、確実に切り替わるよう改善
+- **VP8デフォルト**: 高速エンコードのためVP8をデフォルト有効化
+
+### 動画生成が遅い場合
 
 ```bash
 # VP8コーデック使用（デフォルト有効）
@@ -175,8 +186,8 @@ set USE_VP8=1
 set OUTPUT_MAX_WIDTH=960
 set SLIDE_RENDER_SCALE=1.0
 
-# FPSを下げる（静止画ベースなので問題なし）
-set OUTPUT_FPS=10
+# FPSを下げる（ただし字幕切り替わりに影響する可能性あり）
+set OUTPUT_FPS=20
 ```
 
 ## 🐛 トラブルシューティング
@@ -214,10 +225,26 @@ py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
 
 | ドキュメント | 説明 |
 |-------------|------|
-| [完全仕様書](https://github.com/J1921604/Slide-Voice-Maker/blob/main/docs/完全仕様書.md) | 詳細な機能仕様 |
+| [完全仕様書](https://github.com/J1921604/Slide-Voice-Maker/blob/main/docs/%E5%AE%8C%E5%85%A8%E4%BB%95%E6%A7%98%E6%9B%B8.md) | 詳細な機能仕様 |
 | [spec.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/spec.md) | 機能仕様書 |
 | [plan.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/plan.md) | 実装計画 |
 | [tasks.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/tasks.md) | タスク一覧 |
+
+## 🌐 GitHub Pages（静的UI）
+
+Actionsが `dist` をデプロイし、静的な `index.html` をGitHub Pagesで公開します。バックエンドAPIはローカルサーバー（`start.ps1` / `py -3.10 -m uvicorn src.server:app`）で動かしてください。
+
+手動でPages用アーティファクトを作る場合:
+
+```bash
+mkdir -p dist
+cp index.html dist/
+cp -r docs dist/docs
+cp -r specs dist/specs
+cp README.md dist/README.md
+```
+
+その後、`actions/upload-pages-artifact` と `actions/deploy-pages` で公開されます（`.github/workflows/pages.yml` 参照）。
 
 ## 📄 ライセンス
 

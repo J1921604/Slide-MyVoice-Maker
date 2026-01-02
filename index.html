@@ -14,14 +14,26 @@
     <style>
         body { font-family: 'Noto Sans JP', sans-serif; }
         .custom-scrollbar::-webkit-scrollbar { width: 6px; }
-        .custom-scrollbar::-webkit-scrollbar-track { background: #1e293b; }
-        .custom-scrollbar::-webkit-scrollbar-thumb { background: #475569; border-radius: 3px; }
-        @keyframes aurora-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(20px, -20px) scale(1.1); } }
-        @keyframes aurora-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-20px, 10px) scale(1.2); } }
-        .animate-aurora-1 { animation: aurora-1 15s infinite ease-in-out; }
-        .animate-aurora-2 { animation: aurora-2 18s infinite ease-in-out; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: #0b0f16; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #f97316; border-radius: 3px; }
+        @keyframes aurora-1 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(24px, -18px) scale(1.12); } }
+        @keyframes aurora-2 { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(-18px, 14px) scale(1.18); } }
+        .animate-aurora-1 { animation: aurora-1 16s infinite ease-in-out; }
+        .animate-aurora-2 { animation: aurora-2 20s infinite ease-in-out; }
         .loading-spinner { animation: spin 1s linear infinite; }
         @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+        .metal-panel {
+            background: linear-gradient(135deg, #0d0f14 0%, #12141c 45%, #0b0c11 100%);
+            border: 1px solid rgba(249, 115, 22, 0.25);
+            box-shadow: 0 10px 30px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.04), 0 0 25px rgba(249, 115, 22, 0.12);
+        }
+        .orange-glow {
+            box-shadow: 0 0 0 1px rgba(249, 115, 22, 0.3), 0 10px 25px rgba(249, 115, 22, 0.22);
+        }
+        .bg-grid {
+            background-image: radial-gradient(circle at 1px 1px, rgba(255,255,255,0.08) 1px, transparent 0);
+            background-size: 36px 36px;
+        }
     </style>
 </head>
 <body class="bg-slate-950">
@@ -108,8 +120,8 @@
             }, [audioRef, currentSlide, subtitleSegments]);
             
             return (
-                <div className="w-full h-[56px] bg-transparent border-t border-white/5 flex items-end justify-center px-4 pb-2 transition-colors duration-300 flex-shrink-0">
-                    <div className="max-w-[min(92vw,56rem)] px-4 py-2 rounded-md bg-slate-700/50 backdrop-blur-sm text-white text-base md:text-lg font-bold text-center leading-snug shadow-xl">
+                <div className="w-full h-[56px] bg-transparent border-t border-amber-500/20 flex items-end justify-center px-4 pb-2 transition-colors duration-300 flex-shrink-0">
+                    <div className="max-w-[min(92vw,56rem)] px-4 py-2 rounded-md bg-black/60 backdrop-blur-sm text-amber-100 text-base md:text-lg font-bold text-center leading-snug shadow-xl shadow-amber-500/25 border border-amber-500/25">
                         {currentSubtitle}
                     </div>
                 </div>
@@ -401,8 +413,22 @@
                     // ファイル参照が失効する前にarrayBufferを先に取得
                     const arrayBuffer = await file.arrayBuffer();
                     
-                    // PDFファイル名を記録（inputフォルダへの保存は不要）
+                    // PDFファイル名を記録
                     setSavedPdfName(file.name);
+
+                    // ローカルバックエンドがあれば input/ に保存
+                    if (localBackendAvailable) {
+                        try {
+                            setStatusMessage('PDFをinput/へ保存中...');
+                            const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
+                            const fd = new FormData();
+                            fd.append('file', blob, file.name);
+                            const res = await fetch('/api/upload/pdf', { method: 'POST', body: fd });
+                            if (!res.ok) throw new Error(`PDF保存失敗: ${res.status}`);
+                        } catch (e) {
+                            console.warn('PDF保存に失敗しました', e);
+                        }
+                    }
 
                     const images = await convertPdfToImages(arrayBuffer);
                     const newSlides = images.map((image, index) => ({
@@ -639,79 +665,38 @@
                 });
             };
 
-            // 初期画面（PDF未アップロード時）
-            if (slides.length === 0) {
-                return (
-                    <div className="min-h-screen bg-slate-950 text-white flex flex-col items-center justify-center p-4 relative overflow-hidden">
-                        <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-violet-600/30 rounded-full blur-[100px] animate-aurora-1" />
-                        <div className="absolute bottom-[-10%] right-[-10%] w-[600px] h-[600px] bg-fuchsia-600/20 rounded-full blur-[120px] animate-aurora-2" />
-                        
-                        <div className="z-10 bg-slate-900/60 backdrop-blur-xl border border-white/10 p-12 rounded-3xl shadow-2xl max-w-2xl w-full text-center">
-                            <div className="mb-8 flex justify-center">
-                                <div className="bg-gradient-to-r from-violet-500 to-fuchsia-500 p-4 rounded-2xl shadow-lg shadow-violet-500/20">
-                                    <Video />
-                                </div>
-                            </div>
-                            <h1 className="text-4xl font-bold mb-4 bg-clip-text text-transparent bg-gradient-to-r from-violet-400 to-fuchsia-400">
-                                Slide Voice Maker
-                            </h1>
-                            <p className="text-lg text-slate-300 mb-2">
-                                PDFスライドと原稿CSVから<br/>ナレーション付き動画を生成
-                            </p>
-                            
-                            {/* ホーム画面はPDF入力ボタンのみ */}
-                            <div className="space-y-4 mb-8">
-                                <button
-                                    onClick={() => fileInputRef.current?.click()}
-                                    disabled={pdfLoading}
-                                    className="w-full px-6 py-4 bg-white text-slate-900 rounded-xl font-bold text-lg hover:bg-slate-100 transition-all flex items-center justify-center gap-3"
-                                >
-                                    {pdfLoading ? (
-                                        <><Loader2 className="loading-spinner" /> PDF読み込み中...</>
-                                    ) : (
-                                        <><Upload /> PDFをアップロード</>
-                                    )}
-                                </button>
-                                <input type="file" ref={fileInputRef} onChange={handlePdfUpload} accept=".pdf" className="hidden" />
-                            </div>
-                            
-                            {statusMessage && (
-                                <div className="text-sm text-slate-400 mb-4">{statusMessage}</div>
-                            )}
-
-                            {!localBackendAvailable && (
-                                <div className="text-sm text-orange-400 mt-4">
-                                    ⚠️ ローカルバックエンド未検出<br/>
-                                    音声生成には py -3.10 -m uvicorn src.server:app を起動してください
-                                </div>
-                            )}
-                        </div>
-                    </div>
-                );
-            }
-
             const activeSlide = slides[activeSlideIndex];
 
             return (
-                <div className="h-screen bg-slate-950 text-slate-200 flex flex-col overflow-hidden">
+                <div className="h-screen bg-[#080b10] bg-grid text-slate-100 flex flex-col overflow-hidden">
                     
                     {/* Header */}
-                    <header className="h-16 bg-slate-900/80 backdrop-blur-md border-b border-white/5 flex items-center justify-between px-6 z-20 whitespace-nowrap">
+                    <header className="h-16 metal-panel backdrop-blur-md border-b border-white/10 flex items-center justify-between px-6 z-20 whitespace-nowrap">
                         <div className="flex items-center gap-3 flex-nowrap min-w-0">
-                            <div className="w-8 h-8 bg-gradient-to-br from-violet-500 to-fuchsia-600 rounded-lg flex items-center justify-center">
+                            <div className="w-9 h-9 bg-gradient-to-br from-amber-500 via-orange-500 to-amber-600 rounded-lg flex items-center justify-center shadow-lg shadow-amber-500/30">
                                 <Video />
                             </div>
-                            <h1 className="font-bold text-2xl">Slide Voice Maker</h1>
-                            <button onClick={() => setShowHelp(true)} className="ml-2 text-slate-400 hover:text-white">
+                            <h1 className="font-bold text-2xl text-amber-200 drop-shadow">Slide Voice Maker</h1>
+                            <button onClick={() => setShowHelp(true)} className="ml-2 text-amber-300 hover:text-white">
                                 <HelpCircle />
                             </button>
                         </div>
                         
                         <div className="flex items-center gap-3 flex-nowrap overflow-x-auto">
+                            {/* PDF入力ボタン */}
+                            <button
+                                onClick={() => fileInputRef.current?.click()}
+                                className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black rounded-lg text-sm whitespace-nowrap border border-amber-300/60 shadow-lg shadow-amber-500/30"
+                                title="PDFをアップロードしてスライドを展開します（input/へ保存）"
+                            >
+                                <Upload /> PDF入力
+                            </button>
+                            <input type="file" ref={fileInputRef} onChange={handlePdfUpload} accept=".pdf" className="hidden" />
+
                             {/* 原稿CSV入力ボタン */}
                             <button
                                 onClick={() => csvInputRef.current?.click()}
-                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10"
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-amber-500/30"
                                 title="原稿.csv入力"
                             >
                                 <FileText /> 原稿CSV入力
@@ -724,7 +709,7 @@
                             <select
                                 value={selectedResolution}
                                 onChange={(e) => setSelectedResolution(e.target.value)}
-                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 cursor-pointer"
+                                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-200 rounded-lg text-sm whitespace-nowrap border border-amber-500/30 cursor-pointer"
                                 title="画像解像度"
                             >
                                 {RESOLUTION_OPTIONS.map(opt => (
@@ -740,7 +725,7 @@
                                     isGeneratingAudio 
                                         ? 'bg-slate-800 text-slate-400 cursor-wait' 
                                         : localBackendAvailable
-                                            ? 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-500/20'
+                                            ? 'bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black shadow-lg shadow-amber-500/30'
                                             : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                                 }`}
                                 title={localBackendAvailable ? '全スライドの画像・音声を生成し、output/temp/へ保存します' : 'バックエンドが起動していません'}
@@ -753,12 +738,12 @@
                             </button>
 
                             {/* 字幕ON/OFFトグル */}
-                            <div className="flex items-center gap-2 px-3 py-2 bg-slate-800 rounded-lg border border-white/10">
-                                <span className="text-sm text-slate-300">字幕</span>
+                            <div className="flex items-center gap-2 px-3 py-2 bg-slate-900 rounded-lg border border-amber-500/30">
+                                <span className="text-sm text-amber-200">字幕</span>
                                 <button
                                     onClick={() => setSubtitleEnabled(!subtitleEnabled)}
                                     className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                                        subtitleEnabled ? 'bg-violet-600' : 'bg-slate-600'
+                                        subtitleEnabled ? 'bg-amber-500' : 'bg-slate-600'
                                     }`}
                                     title={subtitleEnabled ? '字幕ON: 動画に字幕を埋め込みます' : '字幕OFF: 字幕なしで動画を生成します'}
                                 >
@@ -774,7 +759,7 @@
                             <select
                                 value={videoFormat}
                                 onChange={(e) => setVideoFormat(e.target.value)}
-                                className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 cursor-pointer"
+                                className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-200 rounded-lg text-sm whitespace-nowrap border border-amber-500/30 cursor-pointer"
                                 title="動画の出力形式: WebM=軽量・高速 / MP4=互換性重視"
                             >
                                 <option value="webm">WebM</option>
@@ -789,7 +774,7 @@
                                     isGeneratingVideo 
                                         ? 'bg-slate-800 text-slate-400 cursor-wait' 
                                         : localBackendAvailable
-                                            ? 'bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white shadow-lg'
+                                            ? 'bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-500 text-black shadow-lg shadow-orange-500/30'
                                             : 'bg-slate-800 text-slate-500 cursor-not-allowed'
                                 }`}
                                 title={localBackendAvailable ? '動画を生成し、output/へ保存します' : 'バックエンドが起動していません'}
@@ -806,7 +791,7 @@
                             {/* 原稿CSV出力ボタン */}
                             <button
                                 onClick={downloadCsv}
-                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10"
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-200 rounded-lg text-sm whitespace-nowrap border border-amber-500/30"
                                 title="編集した原稿をCSVでダウンロード"
                             >
                                 <Download /> 原稿CSV出力
@@ -816,7 +801,7 @@
                             <button
                                 onClick={exportPptx}
                                 disabled={slides.length === 0}
-                                className="flex items-center gap-2 px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 disabled:opacity-50"
+                                className="flex items-center gap-2 px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-200 rounded-lg text-sm whitespace-nowrap border border-amber-500/30 disabled:opacity-50"
                                 title="現在のスライド画像をPPTXとしてダウンロード（ブラウザ生成）"
                             >
                                 <Download /> PPTX出力
@@ -829,7 +814,7 @@
                                         value={selectedOutputName}
                                         onChange={(e) => setSelectedOutputName(e.target.value)}
                                         onFocus={refreshOutputFiles}
-                                        className="px-3 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm whitespace-nowrap border border-white/10 cursor-pointer"
+                                        className="px-3 py-2 bg-slate-900 hover:bg-slate-800 text-amber-200 rounded-lg text-sm whitespace-nowrap border border-amber-500/30 cursor-pointer"
                                         title={selectedOutputName ? `選択中: ${selectedOutputName}` : 'output/ にある動画（WebM/MP4）を選択'}
                                     >
                                         <option value="">(動画を選択)</option>
@@ -840,7 +825,7 @@
                                     <button
                                         onClick={downloadSelectedVideo}
                                         disabled={!selectedOutputName}
-                                        className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-lg text-sm whitespace-nowrap disabled:opacity-50"
+                                        className="flex items-center gap-2 px-3 py-2 bg-gradient-to-r from-orange-500 via-amber-500 to-orange-600 hover:from-orange-400 hover:to-amber-500 text-black rounded-lg text-sm whitespace-nowrap disabled:opacity-50 shadow-lg shadow-amber-500/30"
                                         title="選択した動画（WebM/MP4）をダウンロード"
                                     >
                                         <Download /> 動画出力
@@ -852,7 +837,7 @@
                     
                     {/* Status Message */}
                     {statusMessage && (
-                        <div className="bg-slate-900/50 border-b border-white/5 px-6 py-2 text-sm text-slate-400">
+                        <div className="bg-slate-900/70 border-b border-amber-500/20 px-6 py-2 text-sm text-amber-200">
                             {statusMessage}
                         </div>
                     )}
@@ -860,25 +845,30 @@
                     {/* Main Content */}
                     <div className="flex-1 flex overflow-hidden">
                         {/* Sidebar */}
-                        <div className="w-64 bg-slate-900 border-r border-white/5 flex flex-col">
-                            <div className="p-4 border-b border-white/5">
-                                <h2 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                        <div className="w-64 metal-panel border-r border-amber-500/25 flex flex-col">
+                            <div className="p-4 border-b border-amber-500/25">
+                                <h2 className="text-xs font-bold text-amber-300 uppercase tracking-wider">
                                     Slides ({slides.length})
                                 </h2>
                             </div>
                             <div className="flex-1 overflow-y-auto p-2 space-y-2 custom-scrollbar">
+                                {slides.length === 0 && (
+                                    <div className="text-center text-slate-500 text-sm px-3 py-6 border border-dashed border-amber-500/30 rounded-lg">
+                                        PDFをアップロードするとスライドがここに表示されます。
+                                    </div>
+                                )}
                                 {slides.map((slide, index) => (
                                     <div key={slide.id} className={`w-full p-2 rounded-lg transition-all border ${
                                         activeSlideIndex === index
-                                            ? 'bg-slate-800 border-violet-500/50 shadow-md'
-                                            : 'hover:bg-slate-800/50 border-transparent hover:border-white/5'
+                                            ? 'bg-slate-900 border-amber-500/50 shadow-md shadow-amber-500/25'
+                                            : 'hover:bg-slate-900/70 border-transparent hover:border-amber-500/30'
                                     }`}>
                                         <button
                                             onClick={() => setActiveSlideIndex(index)}
                                             className="w-full text-left"
                                         >
                                             <div className="flex gap-3">
-                                                <div className="relative w-16 aspect-video bg-slate-950 rounded overflow-hidden border border-white/10 flex-shrink-0">
+                                                <div className="relative w-16 aspect-video bg-[#0b0f16] rounded overflow-hidden border border-amber-500/30 flex-shrink-0">
                                                     <img src={slide.image} className="w-full h-full object-cover" alt={`Slide ${index + 1}`} />
                                                     {slide.isGenerating && (
                                                         <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
@@ -887,10 +877,10 @@
                                                     )}
                                                 </div>
                                                 <div className="flex-1 min-w-0 flex flex-col justify-center">
-                                                    <span className="text-sm font-medium text-slate-300 truncate">Slide {index + 1}</span>
+                                                    <span className="text-sm font-medium text-amber-200 truncate">Slide {index + 1}</span>
                                                     <div className="flex items-center gap-2 mt-1">
                                                         {slide.audio ? (
-                                                            <span className="text-[10px] flex items-center gap-1 text-green-400"><Volume2 /> Audio</span>
+                                                            <span className="text-[10px] flex items-center gap-1 text-amber-300"><Volume2 /> Audio</span>
                                                         ) : (
                                                             <span className="text-[10px] flex items-center gap-1 text-orange-400"><FileText /> Text</span>
                                                         )}
@@ -903,7 +893,7 @@
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); generateSlideAudio(index); }}
                                                 disabled={slide.isGenerating || !localBackendAvailable}
-                                                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-700 disabled:text-slate-500 text-white text-[10px] rounded"
+                                                className="flex-1 flex items-center justify-center gap-1 px-2 py-1 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 disabled:bg-slate-700 disabled:text-slate-500 text-black text-[10px] rounded"
                                                 title="この1スライドの画像・音声を生成"
                                             >
                                                 {slide.isGenerating ? <Loader2 className="loading-spinner w-3 h-3" /> : <Wand2 className="w-3 h-3" />}
@@ -921,7 +911,7 @@
                                                             }
                                                         }, 100);
                                                     }}
-                                                    className="flex items-center justify-center gap-1 px-2 py-1 bg-green-600 hover:bg-green-500 text-white text-[10px] rounded"
+                                                    className="flex items-center justify-center gap-1 px-2 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] rounded"
                                                     title="音声を再生"
                                                 >
                                                     <Play className="w-3 h-3" />
@@ -934,14 +924,20 @@
                         </div>
                         
                         {/* Preview Area */}
-                        <div className="flex-1 flex flex-col bg-slate-950 relative overflow-hidden">
+                        <div className="flex-1 flex flex-col bg-[#080b10] relative overflow-hidden">
                             <div className="flex-1 flex flex-col min-h-0">
-                                <div className="flex-1 bg-slate-950 relative flex items-center justify-center p-4">
+                                <div className="flex-1 bg-[#0b0f16] relative flex items-center justify-center p-4">
                                     <div className="relative w-full h-full max-w-5xl flex flex-col items-center justify-center group">
-                                        <div className="shadow-2xl rounded-lg border border-slate-800 bg-black flex flex-col flex-shrink-1 min-h-0">
-                                            {/* 画像 + 再生ボタンは相対配置コンテナ内にまとめる */}
-                                            <div className="relative rounded-lg overflow-hidden">
-                                                <img src={activeSlide?.image} className="max-w-full max-h-[calc(100vh-440px)] object-contain mx-auto" alt="Slide Preview" />
+                                        <div className="shadow-2xl rounded-lg border border-amber-500/25 bg-[#0b0c12] flex flex-col flex-shrink-1 min-h-0">
+                                                        {/* 画像 + 再生ボタンは相対配置コンテナ内にまとめる */}
+                                                        <div className="relative rounded-lg overflow-hidden">
+                                                            {activeSlide ? (
+                                                                        <img src={activeSlide?.image} className="max-w-full max-h-[calc(100vh-440px)] object-contain mx-auto" alt="Slide Preview" />
+                                                            ) : (
+                                                                        <div className="w-[720px] h-[405px] flex items-center justify-center text-slate-600 text-sm border border-dashed border-amber-500/25 rounded-lg">
+                                                                    PDFをアップロードしてプレビューを表示
+                                                                </div>
+                                                            )}
                                                 <audio 
                                                     ref={audioRef} 
                                                     src={activeSlide?.audio || ""} 
@@ -959,7 +955,7 @@
                                                                 if (isPlaying) audio.pause();
                                                                 else audio.play().catch(() => {});
                                                             }}
-                                                            className="w-16 h-16 bg-violet-600/90 hover:bg-violet-500 text-white rounded-full flex items-center justify-center shadow-xl backdrop-blur-sm transition-transform hover:scale-105"
+                                                            className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 hover:from-amber-400 hover:to-orange-500 text-black rounded-full flex items-center justify-center shadow-xl shadow-amber-500/30 backdrop-blur-sm transition-transform hover:scale-105"
                                                         >
                                                             {isPlaying ? <Square /> : <Play />}
                                                         </button>
@@ -968,15 +964,15 @@
                                             </div>
 
                                             {/* SLIDE番号 / 再生速度（画像に重ならないよう、画像の下に配置） */}
-                                            <div className="mx-3 my-3 flex items-center justify-center gap-3 px-3 py-2 rounded-md bg-slate-900/70 border border-white/10 text-sm font-mono text-slate-100 backdrop-blur-sm">
-                                                <span>SLIDE {String(activeSlideIndex + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</span>
+                                            <div className="mx-3 my-3 flex items-center justify-center gap-3 px-3 py-2 rounded-md bg-slate-900/70 border border-amber-500/25 text-sm font-mono text-amber-200 backdrop-blur-sm">
+                                                <span className="text-amber-100">SLIDE {String(activeSlideIndex + 1).padStart(2, '0')} / {String(slides.length).padStart(2, '0')}</span>
                                                 <div className="h-4 w-px bg-white/15" />
                                                 <div className="flex items-center gap-2">
-                                                    <span className="text-slate-200">速度</span>
+                                                    <span className="text-amber-200">速度</span>
                                                     <select
                                                         value={playbackRate}
                                                         onChange={(e) => setPlaybackRate(parseFloat(e.target.value))}
-                                                        className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-white rounded text-sm whitespace-nowrap border border-white/10 cursor-pointer"
+                                                        className="px-2 py-1 bg-slate-900 hover:bg-slate-800 text-amber-200 rounded text-sm whitespace-nowrap border border-amber-500/30 cursor-pointer"
                                                         title="再生速度"
                                                     >
                                                         <option value="0.5">0.5x</option>
@@ -1015,18 +1011,19 @@
                             </div>
                             
                             {/* Script Editor */}
-                            <div className="h-[200px] bg-slate-900 flex flex-col flex-shrink-0">
-                                <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 bg-slate-900/50">
-                                    <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-2">
+                            <div className="h-[200px] bg-[#0d1119] flex flex-col flex-shrink-0 border-t border-amber-500/20">
+                                <div className="flex items-center justify-between px-4 py-2 border-b border-amber-500/20 bg-slate-900/60">
+                                    <span className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-2">
                                         <FileText /> Narration Script
                                     </span>
-                                    <span className="text-xs text-slate-600">{activeSlide?.script?.length || 0} characters</span>
+                                    <span className="text-xs text-amber-200/70">{activeSlide?.script?.length || 0} characters</span>
                                 </div>
                                 <textarea
                                     value={activeSlide?.script || ""}
                                     onChange={(e) => updateScript(activeSlideIndex, e.target.value)}
-                                    className="flex-1 bg-slate-900 p-4 text-slate-300 text-lg leading-relaxed resize-none focus:outline-none focus:bg-slate-800/50 transition-colors"
+                                    className="flex-1 bg-[#0b0f16] p-4 text-amber-100 text-lg leading-relaxed resize-none focus:outline-none focus:bg-slate-900/60 transition-colors"
                                     placeholder="ここに読み上げ原稿を入力してください..."
+                                    disabled={slides.length === 0}
                                 />
                             </div>
                         </div>
@@ -1043,24 +1040,27 @@
                                 <div className="p-6 space-y-4">
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
                                         <h4 className="font-bold text-violet-400 mb-2">[STEP 1] PDFアップロード</h4>
-                                        <p className="text-sm text-slate-300">プレゼンテーションPDFをアップロードすると、各ページがスライドとして読み込まれます。</p>
+                                        <p className="text-sm text-slate-300">ヘッダー左の「PDF入力」ボタンからPDFをアップロードすると、input/に保存しつつブラウザでスライド展開します。</p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
                                         <h4 className="font-bold text-violet-400 mb-2">[STEP 2] 原稿CSV入力</h4>
-                                        <p className="text-sm text-slate-300">「index,script」形式のCSVを読み込むと、各スライドに原稿が割り当てられます。UTF-8/Shift_JIS対応。<br/>読み込み時にinput/原稿.csvに上書き保存されます。</p>
+                                        <p className="text-sm text-slate-300">「index,script」形式のCSVを読み込むと、各スライドに原稿が割り当てられます。UTF-8/Shift_JIS対応。読み込み時に毎回input/原稿.csvへ上書き保存します。</p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 3] 画像・音声生成</h4>
-                                        <p className="text-sm text-slate-300">「画像・音声生成」ボタンで全スライドの画像・音声を一括生成します。output/tempフォルダに音声(mp3)と画像(png)が保存されます。</p>
-                                        <p className="text-xs text-slate-400 mt-2">各スライドの「画像・音声」ボタンで個別に生成も可能です。プレビュー上の「速度」で全スライドの再生速度を調整できます。</p>
+                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 3] 解像度と字幕・形式を選択</h4>
+                                        <p className="text-sm text-slate-300">解像度プルダウン（720p/1080p/1440p）、字幕ON/OFF、動画形式（WebM/MP4）を選択します。</p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 4] 動画生成</h4>
-                                        <p className="text-sm text-slate-300">「動画生成」ボタンでoutput/tempの音声・画像から動画（WebM/MP4）を生成します。PDFと同名でoutputフォルダに保存されます。</p>
+                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 4] 画像・音声生成</h4>
+                                        <p className="text-sm text-slate-300">「画像・音声生成」ボタンでoutput/tempをクリアした上で全スライドの画像/音声を生成し、上書き保存します。各スライド単位の生成・再生ボタンもサイドバーに用意しています。</p>
                                     </div>
                                     <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
-                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 5] ダウンロード</h4>
-                                        <p className="text-sm text-slate-300">「原稿CSV出力」で編集した原稿をダウンロード。「動画出力」で生成した動画（WebM/MP4）をダウンロードできます。</p>
+                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 5] 動画生成</h4>
+                                        <p className="text-sm text-slate-300">「動画生成」ボタンでoutput/tempの素材から動画（WebM/MP4）を生成し、PDFと同名でoutputに保存します。字幕ONの場合はYouTube風の半透明背景字幕を焼き込みます。</p>
+                                    </div>
+                                    <div className="bg-slate-800/50 rounded-lg p-4 border border-white/5">
+                                        <h4 className="font-bold text-violet-400 mb-2">[STEP 6] ダウンロード</h4>
+                                        <p className="text-sm text-slate-300">「原稿CSV出力」で編集済み原稿をダウンロード。「動画出力」でoutputに保存されたWebM/MP4をダウンロードできます。PPTX出力も可能です。</p>
                                     </div>
                                 </div>
                                 <div className="p-4 bg-slate-950 border-t border-white/5 flex justify-end">
