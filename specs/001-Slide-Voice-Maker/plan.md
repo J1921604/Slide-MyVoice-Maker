@@ -26,7 +26,7 @@
 ## 技術コンテキスト
 
 **言語/バージョン**: Python 3.10.11
-**主要依存関係**: edge-tts, moviepy<2.0, pymupdf, pandas, imageio-ffmpeg, fastapi, uvicorn
+**主要依存関係**: TTS (Coqui), edge-tts, moviepy<2.0, pymupdf, pandas, imageio-ffmpeg, fastapi, uvicorn, torch, torchaudio
 **ストレージ**: ファイルシステム（output/, output/temp/）
 **テスト**: 手動テスト + E2Eスクリプト
 **ターゲットプラットフォーム**: Windows

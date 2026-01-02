@@ -9,4 +9,7 @@ python-multipart
 Pillow
 requests
 pytest
+TTS
+torch
+torchaudio
 

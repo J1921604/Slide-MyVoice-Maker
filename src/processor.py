@@ -616,11 +616,52 @@ def _embed_subtitles(input_path: str, subtitle_path: str, output_path: str) -> N
         raise RuntimeError(f"FFmpeg subtitle embedding failed (code={proc.returncode}): {err}")
 
 
-async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural"):
-    """Edge TTSを使って音声を生成する"""
-    # edge_tts は import が重い/環境差があるため遅延import
+async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural", use_coqui=True):
+    """Coqui TTSまたはEdge TTSを使って音声を生成する
+    
+    Args:
+        text: 音声化するテキスト
+        output_path: 出力ファイルパス
+        voice: Edge TTSのボイス名（Coquiを使用しない場合）
+        use_coqui: True の場合Coqui TTS、Falseの場合Edge TTS
+    """
+    # 環境変数でCoqui TTS使用をコントロール可能にする
+    use_coqui_env = os.environ.get("USE_COQUI_TTS", "1") == "1"
+    use_coqui = use_coqui and use_coqui_env
+    
+    if use_coqui:
+        try:
+            # Coqui TTS（遅延import）
+            from TTS.api import TTS
+            import torch
+            
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            
+            # サンプル音声ファイルのパス（存在しない場合はEdge TTSにフォールバック）
+            speaker_wav = os.environ.get("COQUI_SPEAKER_WAV", "models/samples/aki_sample.wav")
+            
+            if not os.path.exists(speaker_wav):
+                print(f"Warning: Speaker sample not found at {speaker_wav}, falling back to Edge TTS")
+                use_coqui = False
+            else:
+                # XTTS v2モデルを使用（多言語対応）
+                tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+                
+                print(f"Generating voice with Coqui TTS: {text[:50]}...")
+                tts.tts_to_file(
+                    text=text,
+                    speaker_wav=speaker_wav,
+                    language="ja",
+                    file_path=output_path
+                )
+                print(f"Voice generated: {output_path}")
+                return
+        except Exception as e:
+            print(f"Warning: Coqui TTS failed ({e}), falling back to Edge TTS")
+            use_coqui = False
+    
+    # Edge TTSにフォールバック
     import edge_tts
-
     communicate = edge_tts.Communicate(text, voice)
     await communicate.save(output_path)
 

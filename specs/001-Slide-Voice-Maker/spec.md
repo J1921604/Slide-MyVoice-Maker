@@ -202,10 +202,10 @@ erDiagram
 | 項目 | 技術 |
 |------|------|
 | 言語 | Python 3.10.11 |
-| 音声合成 | Edge TTS |
+| 音声合成 | Coqui TTS (XTTS v2) + Edge TTS（フォールバック） |
 | 動画編集 | MoviePy < 2.0 |
 | PDF処理 | PyMuPDF (fitz) |
-| 動画エンコード | FFmpeg (VP8/VP9) |
+| 動画エンコード | FFmpeg (VP8/VP9/H.264) |
 | Web UI | React 18 + Tailwind CSS + PDF.js |
 | サーバー | FastAPI + Uvicorn |
 
@@ -220,5 +220,7 @@ imageio-ffmpeg
 Pillow
 requests
 pytest
-
+TTS
+torch
+torchaudio
 ```

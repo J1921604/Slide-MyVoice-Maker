@@ -144,6 +144,8 @@ index,script
 
 | 変数名 | デフォルト | 説明 |
 |--------|-----------|------|
+| `USE_COQUI_TTS` | `1` | Coqui TTS使用（`0`でEdge TTSのみ） |
+| `COQUI_SPEAKER_WAV` | `models/samples/aki_sample.wav` | Coqui TTSの話者サンプル音声パス |
 | `USE_VP8` | `1` | VP8使用（高速）。`0`でVP9（高品質）。 |
 | `VP9_CPU_USED` | `8` | エンコード速度（0-8、大きいほど高速） |
 | `VP9_CRF` | `40` | 品質（大きいほど低品質・高速） |
@@ -252,6 +254,7 @@ MIT License
 
 ## 🙏 クレジット
 
+- [Coqui TTS](https://github.com/coqui-ai/TTS) - オープンソース音声合成
 - [Edge TTS](https://github.com/rany2/edge-tts) - Microsoft Edge音声合成
 - [PyMuPDF](https://pymupdf.readthedocs.io/) - PDF処理
 - [MoviePy](https://zulko.github.io/moviepy/) - 動画編集（フォールバック用）
