@@ -45,6 +45,17 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.post("/api/warmup_tts")
+async def warmup_tts() -> dict[str, str]:
+    """Coqui TTSモデルを事前ロードする（初回アクセス高速化）"""
+    try:
+        from processor import _get_tts_model
+        _get_tts_model()  # モデルをキャッシュにロード
+        return {"status": "ready", "message": "Coqui TTS model loaded successfully"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 def _sanitize_filename(name: str) -> str:
     # すごく雑に危険文字だけ落とす（Windows/Unix両方を意識）
     name = name.strip().replace("\\", "_").replace("/", "_")

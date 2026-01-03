@@ -662,17 +662,6 @@ async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural", use_coqu
             "Coqui TTS が無効化されています。USE_COQUI_TTS=1 を設定し、Coquiモデルを利用してください。"
         )
 
-    # TorchCodec 依存を排除するため、先に torchaudio をパッチ
-    _patch_torchaudio_load()
-
-    try:
-        from TTS.api import TTS
-        import torch
-    except Exception as e:  # pragma: no cover - 実行環境依存
-        raise RuntimeError("Coqui TTS の読み込みに失敗しました。requirements を再インストールしてください。") from e
-
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-
     # 話者サンプル WAV（デフォルトは自録りファイル）
     repo_root = Path(__file__).resolve().parent
     default_sample = repo_root / "voice" / "models" / "samples" / "sample.wav"
@@ -685,7 +674,9 @@ async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural", use_coqu
         )
 
     try:
-        tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        # キャッシュされたTTSモデルを取得（初回のみロード）
+        tts = _get_tts_model()
+        
         print(f"Generating voice with Coqui TTS: {text[:50]}...")
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         tts.tts_to_file(
@@ -752,6 +743,47 @@ def _select_temp_dir(output_dir: str, output_name: str, temp_subdir: Optional[st
         return cand2
 
     return base
+
+
+# Coqui TTSのグローバルキャッシュ（初回初期化のみ実行）
+_tts_cache = None
+_tts_cache_lock = None
+
+
+def _get_tts_model():
+    """Coqui TTSモデルのシングルトンを取得する。初回のみモデルロードを行う。"""
+    global _tts_cache, _tts_cache_lock
+    
+    if _tts_cache is not None:
+        return _tts_cache
+    
+    # スレッドセーフな初期化（asyncio + threading混在環境）
+    import threading
+    if _tts_cache_lock is None:
+        _tts_cache_lock = threading.Lock()
+    
+    with _tts_cache_lock:
+        # ダブルチェックロック
+        if _tts_cache is not None:
+            return _tts_cache
+        
+        # TorchCodec 依存を排除するため、先に torchaudio をパッチ
+        _patch_torchaudio_load()
+        
+        try:
+            from TTS.api import TTS
+            import torch
+        except Exception as e:
+            raise RuntimeError("Coqui TTS の読み込みに失敗しました。requirements を再インストールしてください。") from e
+        
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print(f"Coqui TTS モデルを初期化中... (device: {device})")
+        print("初回実行時はモデルダウンロードに30-60秒かかります。")
+        
+        _tts_cache = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        print("Coqui TTS モデル初期化完了")
+        
+        return _tts_cache
 
 
 def _parse_slide_index_from_stem(stem: str) -> Optional[int]:
