@@ -82,7 +82,7 @@
 
         const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-        const fetchJson = async (url, options = {}, timeoutMs = 2000) => {
+        const fetchJson = async (url, options = {}, timeoutMs = 180000) => {
             const ctrl = new AbortController();
             const t = setTimeout(() => ctrl.abort(), timeoutMs);
             try {
@@ -92,6 +92,11 @@
                     throw new Error(`${res.status} ${res.statusText}${text ? `: ${text}` : ''}`);
                 }
                 return await res.json();
+            } catch (err) {
+                if (err.name === 'AbortError') {
+                    throw new Error(`タイムアウト（${timeoutMs/1000}秒超過）: サーバー応答がありませんでした。Coqui TTSの初回実行時は時間がかかる場合があります。`);
+                }
+                throw err;
             } finally {
                 clearTimeout(t);
             }
@@ -521,7 +526,7 @@
                     // 全スライドの音声を生成（画像も送信）
                     for (let i = 0; i < slides.length; i++) {
                         const slide = slides[i];
-                        setStatusMessage(`音声生成中... (${i + 1}/${slides.length})`);
+                        setStatusMessage(`音声生成中... (${i + 1}/${slides.length}) ${i === 0 ? '初回はモデルロードに時間がかかります' : ''}`);
                         
                         const body = JSON.stringify({ 
                             output_name: pdfBaseName,
@@ -534,7 +539,7 @@
                             method: 'POST', 
                             headers: { 'Content-Type': 'application/json' }, 
                             body 
-                        }, 120000);
+                        }, 300000);
                         
                         if (res && res.audio_url) {
                             setSlides(prev => {
@@ -585,7 +590,7 @@
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' }, 
                         body 
-                    }, 120000);
+                    }, 300000);
                     
                     if (res && res.audio_url) {
                         setSlides(prev => {

@@ -1,7 +1,5 @@
-edge-tts
 moviepy<2.0
 pymupdf
-pandas
 imageio-ffmpeg
 fastapi
 uvicorn
@@ -9,6 +7,8 @@ python-multipart
 Pillow
 requests
 pytest
+cutlet
+unidic-lite
 coqui-tts
 sounddevice
 soundfile

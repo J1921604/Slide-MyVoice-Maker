@@ -5,13 +5,40 @@ import torch
 import platform
 import subprocess
 
+# TorchCodec問題回避: torchaudioの代わりにsoundfileを使うようにパッチ
+def _patch_torchaudio_load():
+    """torchaudio.loadをsoundfileベースに置き換えてTorchCodecを回避"""
+    try:
+        import soundfile as sf
+        import torchaudio
+        import numpy as np
+        
+        original_load = torchaudio.load
+        
+        def patched_load(filepath, *args, **kwargs):
+            # soundfileで読み込み
+            audio_data, sample_rate = sf.read(filepath)
+            
+            # numpy配列をtorch tensorに変換
+            if audio_data.ndim == 1:
+                audio_tensor = torch.from_numpy(audio_data).unsqueeze(0)  # (1, samples)
+            else:
+                audio_tensor = torch.from_numpy(audio_data.T)  # (channels, samples)
+            
+            return audio_tensor.float(), sample_rate
+        
+        # torchaudio.loadを置き換え
+        torchaudio.load = patched_load
+        print("TorchCodecバイパス: torchaudio.loadをsoundfileベースにパッチしました")
+    except ImportError as e:
+        print(f"Warning: soundfileのインポートに失敗。TorchCodecエラーが発生する可能性があります: {e}")
+
 class Voice:
     def __init__(self):
         print("音声モデルを初期化中...")
         
-        # TorchCodecを無効化してtorchaudioを使用するように環境変数を設定
-        os.environ['TORCHAUDIO_USE_BACKEND_DISPATCHER'] = '1'
-        os.environ.pop('USE_TORCHCODEC', None)
+        # TorchCodec回避パッチを適用
+        _patch_torchaudio_load()
         
         device = "cuda" if torch.cuda.is_available() else "cpu"
 
@@ -49,59 +76,23 @@ class Voice:
     def speak(self, text, output_filename="output.wav"):
         repo_root = Path(__file__).resolve().parents[2]
         output_path = repo_root / "output" / output_filename
-        try:
-            print(f"音声生成中: {text}")
-            
-            # speaker_wavなしでデフォルト合成モードを利用
-            # XTTS v2はspeaker_wav必須のため、ここではEdge TTSにフォールバック
-            # （または事前に埋め込みspeakerを使う）
-            # 簡易対処：speakerなしの場合はEdge TTSを呼ぶ
-            if not self.speaker_wav:
-                print("Warning: speaker_wavがないためEdge TTSで生成します")
-                import edge_tts
-                import asyncio
-                communicate = edge_tts.Communicate(text, "ja-JP-NanamiNeural")
-                asyncio.run(communicate.save(str(output_path)))
-                print(f"生成完了: {output_path}")
-                return output_path
-            
-            # speaker_wavがある場合、パスを直接渡さずに一時的にロードして渡す
-            try:
-                import soundfile as sf
-                
-                # soundfileで読み込む（torchcodecを使わない）
-                audio_data, sample_rate = sf.read(self.speaker_wav)
-                
-                # 一時ファイルに書き出す（torchaudioではなくsoundfileで）
-                temp_wav = repo_root / "output" / "_temp_speaker.wav"
-                sf.write(str(temp_wav), audio_data, sample_rate)
-                
-                print(f"speaker_wavを読み込みました: {self.speaker_wav}")
-                
-                # 環境変数でtorchaudioバックエンドを強制（TorchCodecを回避）
-                import os
-                os.environ['TORCHAUDIO_BACKEND'] = 'soundfile'
-                
-                self.tts.tts_to_file(
-                    text=text,
-                    speaker_wav=str(temp_wav),
-                    language="ja",
-                    file_path=str(output_path)
-                )
-                print(f"生成完了: {output_path}")
-                return output_path
-            except Exception as e_coqui:
-                print(f"Warning: Coqui TTS failed ({e_coqui}), falling back to Edge TTS")
-                import edge_tts
-                import asyncio
-                communicate = edge_tts.Communicate(text, "ja-JP-NanamiNeural")
-                asyncio.run(communicate.save(str(output_path)))
-                print(f"生成完了(Edge TTS): {output_path}")
-                return output_path
-                
-        except Exception as e:
-            print(f"エラー発生: {e}")
-            return None
+        
+        print(f"音声生成中: {text}")
+        
+        if not self.speaker_wav:
+            raise ValueError("speaker_wavが設定されていません。create_voice.pyでサンプル音声を録音してください。")
+        
+        print(f"speaker_wavを使用: {self.speaker_wav}")
+        
+        # Coqui TTS（XTTS v2）で音声生成
+        self.tts.tts_to_file(
+            text=text,
+            speaker_wav=str(self.speaker_wav),
+            language="ja",
+            file_path=str(output_path)
+        )
+        print(f"生成完了: {output_path}")
+        return output_path
 
     def test_voice(self):
         test_text = "こんにちは、お母さん。今日も元気ですか？"

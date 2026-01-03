@@ -17,6 +17,36 @@ if not hasattr(Image, 'ANTIALIAS'):
 import imageio_ffmpeg
 
 
+def _patch_torchaudio_load() -> None:
+    """torchaudio.load を soundfile ベースに差し替えて TorchCodec 依存を回避する。
+
+    TorchCodec は Windows で FFmpeg の shared DLL を要求し、環境が整っていないと
+    「Could not load libtorchcodec」などのエラーを誘発する。Coqui TTS 内部で
+    torchaudio.load が呼ばれるため、事前に soundfile 実装へ置き換えておく。
+    """
+
+    try:
+        import soundfile as sf
+        import torchaudio
+        import torch
+    except ImportError as e:  # pragma: no cover - 実行環境の不足を明示
+        raise RuntimeError(
+            "torchaudio/soundfile の読み込みに失敗しました。requirements.txt を再インストールしてください。"
+        ) from e
+
+    def patched_load(filepath, *args, **kwargs):
+        audio_data, sample_rate = sf.read(filepath)
+        if audio_data.ndim == 1:
+            audio_tensor = torch.from_numpy(audio_data).unsqueeze(0)
+        else:
+            audio_tensor = torch.from_numpy(audio_data.T)
+        return audio_tensor.float(), sample_rate
+
+    # 既存の load を置換（元の関数は保持しない。TorchCodec を経由しないことを優先）
+    torchaudio.load = patched_load
+    print("TorchCodecバイパス: torchaudio.load を soundfile ベースに差し替えました")
+
+
 def _read_script_csv(script_path: str) -> dict[int, str]:
     """原稿CSV（index,script）を辞書化して返す。
 
@@ -617,53 +647,66 @@ def _embed_subtitles(input_path: str, subtitle_path: str, output_path: str) -> N
 
 
 async def generate_voice(text, output_path, voice="ja-JP-NanamiNeural", use_coqui=True):
-    """Coqui TTSまたはEdge TTSを使って音声を生成する
-    
+    """Coqui TTS で音声を生成する（Edge TTS へのフォールバックは無効化）。
+
     Args:
         text: 音声化するテキスト
         output_path: 出力ファイルパス
-        voice: Edge TTSのボイス名（Coquiを使用しない場合）
-        use_coqui: True の場合Coqui TTS、Falseの場合Edge TTS
+        voice: 互換性のため残すが、現在は未使用
+        use_coqui: 環境変数 USE_COQUI_TTS と掛け合わせて制御
     """
-    # 環境変数でCoqui TTS使用をコントロール可能にする
+
     use_coqui_env = os.environ.get("USE_COQUI_TTS", "1") == "1"
-    use_coqui = use_coqui and use_coqui_env
-    
-    if use_coqui:
-        try:
-            # Coqui TTS（遅延import）
-            from TTS.api import TTS
-            import torch
-            
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            
-            # サンプル音声ファイルのパス（存在しない場合はEdge TTSにフォールバック）
-            speaker_wav = os.environ.get("COQUI_SPEAKER_WAV", "models/samples/aki_sample.wav")
-            
-            if not os.path.exists(speaker_wav):
-                print(f"Warning: Speaker sample not found at {speaker_wav}, falling back to Edge TTS")
-                use_coqui = False
-            else:
-                # XTTS v2モデルを使用（多言語対応）
-                tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2").to(device)
-                
-                print(f"Generating voice with Coqui TTS: {text[:50]}...")
-                tts.tts_to_file(
-                    text=text,
-                    speaker_wav=speaker_wav,
-                    language="ja",
-                    file_path=output_path
-                )
-                print(f"Voice generated: {output_path}")
-                return
-        except Exception as e:
-            print(f"Warning: Coqui TTS failed ({e}), falling back to Edge TTS")
-            use_coqui = False
-    
-    # Edge TTSにフォールバック
-    import edge_tts
-    communicate = edge_tts.Communicate(text, voice)
-    await communicate.save(output_path)
+    if not (use_coqui and use_coqui_env):
+        raise RuntimeError(
+            "Coqui TTS が無効化されています。USE_COQUI_TTS=1 を設定し、Coquiモデルを利用してください。"
+        )
+
+    # TorchCodec 依存を排除するため、先に torchaudio をパッチ
+    _patch_torchaudio_load()
+
+    try:
+        from TTS.api import TTS
+        import torch
+    except Exception as e:  # pragma: no cover - 実行環境依存
+        raise RuntimeError("Coqui TTS の読み込みに失敗しました。requirements を再インストールしてください。") from e
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+
+    # 話者サンプル WAV（デフォルトは自録りファイル）
+    repo_root = Path(__file__).resolve().parent
+    default_sample = repo_root / "voice" / "models" / "samples" / "sample.wav"
+    speaker_wav = Path(os.environ.get("COQUI_SPEAKER_WAV", default_sample))
+
+    if not speaker_wav.exists():
+        raise FileNotFoundError(
+            f"話者サンプルが見つかりません: {speaker_wav}\n"
+            "src/voice/create_voice.py を実行し、自分の声を録音してください。"
+        )
+
+    try:
+        tts = TTS(model_name="tts_models/multilingual/multi-dataset/xtts_v2").to(device)
+        print(f"Generating voice with Coqui TTS: {text[:50]}...")
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        tts.tts_to_file(
+            text=text,
+            speaker_wav=str(speaker_wav),
+            language="ja",
+            file_path=output_path,
+        )
+        print(f"Voice generated: {output_path}")
+    except OSError as e:
+        # TorchCodec が見つからない場合に明示的なメッセージを出す
+        msg = str(e)
+        if "torchcodec" in msg.lower():
+            raise RuntimeError(
+                "TorchCodec の読み込みに失敗しました。FFmpeg full-shared 版を導入し、"
+                "docs/ffmpegインストール手順.md の手順で PATH を設定してください。"
+            ) from e
+        raise
+    except Exception:
+        # 例外を握りつぶさず、そのまま上位へ投げる（Edge TTS にはフォールバックしない）
+        raise
 
 
 async def generate_single_audio(
