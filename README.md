@@ -1,10 +1,10 @@
-# Slide Voice Maker
+﻿# Slide Voice Maker
 
 PDFスライドと原稿CSVから、AI音声ナレーション付き動画（WebM）を自動生成するツールです。
 
 **バージョン**: 1.0.0  
 **日付**: 2026-01-05  
-**リポジトリ**: https://github.com/J1921604/Slide-Voice-Maker
+**リポジトリ**: https://github.com/J1921604/Slide-MyVoice-Maker
 
 ## 📦 機能概要
 
@@ -104,7 +104,7 @@ py -3.10 src\main.py --input input --output output --script input\原稿.csv --r
 ## 📁 ファイル構成
 
 ```
-Slide-Voice-Maker/
+Slide-MyVoice-Maker/
 ├── index.html          # WebアプリUI（GitHub Pages静的配信対応）
 ├── start.ps1           # ワンクリック起動スクリプト
 ├── requirements.txt    # Python依存パッケージ
@@ -233,10 +233,10 @@ py -3.10 -m uvicorn src.server:app --host 127.0.0.1 --port 8000
 
 | ドキュメント | 説明 |
 |-------------|------|
-| [完全仕様書](https://github.com/J1921604/Slide-Voice-Maker/blob/main/docs/%E5%AE%8C%E5%85%A8%E4%BB%95%E6%A7%98%E6%9B%B8.md) | 詳細な機能仕様 |
-| [spec.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/spec.md) | 機能仕様書 |
-| [plan.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/plan.md) | 実装計画 |
-| [tasks.md](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/tasks.md) | タスク一覧 |
+| [完全仕様書](https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/docs/%E5%AE%8C%E5%85%A8%E4%BB%95%E6%A7%98%E6%9B%B8.md) | 詳細な機能仕様 |
+| [spec.md](https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/spec.md) | 機能仕様書 |
+| [plan.md](https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/plan.md) | 実装計画 |
+| [tasks.md](https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/tasks.md) | タスク一覧 |
 
 ## 🌐 GitHub Pages（静的UI）
 

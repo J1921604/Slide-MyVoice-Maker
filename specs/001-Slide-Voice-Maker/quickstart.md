@@ -1,4 +1,4 @@
-# クイックスタート: Slide Voice Maker
+﻿# クイックスタート: Slide Voice Maker
 
 **日付**: 2026-01-05
 **対象**: 開発者・利用者
@@ -20,8 +20,8 @@ Slide Voice MakerはPDFスライドと原稿CSVからAI音声ナレーション�
 ### 1. リポジトリクローン
 
 ```bash
-git clone https://github.com/J1921604/Slide-Voice-Maker.git
-cd Slide-Voice-Maker
+git clone https://github.com/J1921604/Slide-MyVoice-Maker.git
+cd Slide-MyVoice-Maker
 ```
 
 ### 2. 依存パッケージインストール
@@ -177,6 +177,6 @@ py -3.10 src\main.py 2>&1 | tee log.txt
 
 ## 次のステップ
 
-- [機能仕様書](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/spec.md)を確認
-- [実装計画](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/plan.md)を確認
-- [タスク一覧](https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/tasks.md)で進捗確認
+- [機能仕様書](https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/spec.md)を確認
+- [実装計画](https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/plan.md)を確認
+- [タスク一覧](https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/tasks.md)で進捗確認

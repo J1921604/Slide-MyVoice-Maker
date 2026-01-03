@@ -1,6 +1,6 @@
-# タスク一覧: Slide Voice Maker
+﻿# タスク一覧: Slide Voice Maker
 
-**入力**: `/specs/001-Slide-Voice-Maker/` からの設計ドキュメント
+**入力**: `/specs/001-Slide-MyVoice-Maker/` からの設計ドキュメント
 **前提条件**: plan.md（必須）、spec.md（必須）、data-model.md、contracts/
 **バージョン**: 1.0.0
 **開始日**: 2026-01-05
@@ -52,7 +52,7 @@ gantt
 
 **目的**: プロジェクト構造確認と仕様ドキュメント作成
 
-- [x] T001 specs/001-Slide-Voice-Maker/フォルダを作成
+- [x] T001 specs/001-Slide-MyVoice-Maker/フォルダを作成
 - [x] T002 [P] spec.md（機能仕様書）を作成
 - [x] T003 [P] plan.md（実装計画）を作成
 
@@ -133,7 +133,7 @@ gantt
 - [x] T020 [P] tests/e2e/test_local_backend.pyでバックエンドE2Eテスト
 - [x] T021 [P] README.mdを要件/テスト/実行手順に整合
 - [x] T022 [P] docs/完全仕様書.mdを現行仕様に整合
-- [x] T023 [P] specs/001-Slide-Voice-Maker/{spec,plan,quickstart}.mdを整合（リンクはGitHub URLへ）
+- [x] T023 [P] specs/001-Slide-MyVoice-Maker/{spec,plan,quickstart}.mdを整合（リンクはGitHub URLへ）
 - [x] T024 E2Eを実行し100%成功を確認
 
 **チェックポイント**: 全機能テスト・ドキュメント完了

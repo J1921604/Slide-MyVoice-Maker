@@ -1,6 +1,6 @@
-# 機能仕様書: Slide Voice Maker
+﻿# 機能仕様書: Slide Voice Maker
 
-**機能ブランチ**: `001-Slide-Voice-Maker`
+**機能ブランチ**: `001-Slide-MyVoice-Maker`
 **作成日**: 2026-01-05
 **バージョン**: 1.0.0
 **状態**: 承認済

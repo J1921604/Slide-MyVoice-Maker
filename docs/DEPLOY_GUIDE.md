@@ -1,8 +1,8 @@
-# デプロイガイド (GitHub Pages + ローカルバックエンド)
+﻿# デプロイガイド (GitHub Pages + ローカルバックエンド)
 
 **バージョン**: 1.0.0  
 **日付**: 2026-01-05  
-**リポジトリ**: https://github.com/J1921604/Slide-Voice-Maker
+**リポジトリ**: https://github.com/J1921604/Slide-MyVoice-Maker
 
 ## アーキテクチャ概要
 - フロントエンド: 静的 `index.html` を GitHub Pages で配信
@@ -92,8 +92,8 @@ start http://127.0.0.1:8000/index.html
 - **字幕が切り替わらない**: 句読点でチャンク分割し、最小セグメント幅0.15秒を確保するASSを生成しています。CSVの句読点を確認してください。FPSを30fpsにすることで改善します。
 
 ## リンク
-- リポジトリ: https://github.com/J1921604/Slide-Voice-Maker
-- 完全仕様書: https://github.com/J1921604/Slide-Voice-Maker/blob/main/docs/%E5%AE%8C%E5%85%A8%E4%BB%95%E6%A7%98%E6%9B%B8.md
-- 仕様 (spec): https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/spec.md
-- 計画 (plan): https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/plan.md
-- タスク (tasks): https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/tasks.md
+- リポジトリ: https://github.com/J1921604/Slide-MyVoice-Maker
+- 完全仕様書: https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/docs/%E5%AE%8C%E5%85%A8%E4%BB%95%E6%A7%98%E6%9B%B8.md
+- 仕様 (spec): https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/spec.md
+- 計画 (plan): https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/plan.md
+- タスク (tasks): https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/tasks.md

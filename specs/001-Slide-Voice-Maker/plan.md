@@ -1,8 +1,8 @@
-# 実装計画: Slide Voice Maker
+﻿# 実装計画: Slide Voice Maker
 
-**ブランチ**: `001-Slide-Voice-Maker`
+**ブランチ**: `001-Slide-MyVoice-Maker`
 **日付**: 2026-01-05
-**仕様**: https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/spec.md
+**仕様**: https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/spec.md
 
 ## 概要
 
@@ -56,7 +56,7 @@
 ### ドキュメント（本機能）
 
 ```text
-specs/001-Slide-Voice-Maker/
+specs/001-Slide-MyVoice-Maker/
 ├── spec.md              # 機能仕様書
 ├── plan.md              # 本ファイル（実装計画）
 ├── tasks.md             # タスク一覧
@@ -69,7 +69,7 @@ specs/001-Slide-Voice-Maker/
 ### ソースコード（リポジトリルート）
 
 ```text
-Slide-Voice-Maker/
+Slide-MyVoice-Maker/
 ├── index.html           # Web UI（サーバー連携、GitHub Pages静的配信）
 ├── start.ps1            # ワンクリック起動スクリプト
 ├── requirements.txt     # Python依存パッケージ
@@ -237,7 +237,7 @@ stateDiagram-v2
 
 ## Phase 2: 実装
 
-タスク詳細は https://github.com/J1921604/Slide-Voice-Maker/blob/main/specs/001-Slide-Voice-Maker/tasks.md を参照。
+タスク詳細は https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/tasks.md を参照。
 
 ## 検証計画
 
