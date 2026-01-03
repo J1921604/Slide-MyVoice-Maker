@@ -260,7 +260,7 @@ flowchart LR
 
 ### 機能一覧
 
-PDFとCSVをinput/フォルダに保存し、Edge TTSで実際のAI音声を生成する。
+PDFとCSVをinput/フォルダに保存し、**Coqui TTS (XTTS v2)** で自分の声を使ったAI音声を生成する。
 
 ```mermaid
 flowchart TD
@@ -269,7 +269,7 @@ flowchart TD
     C --> D[原稿CSV入力]
     D --> E[input/原稿.csv上書き]
     C --> F[解像度/字幕/形式選択]
-    F --> G[画像・音声生成]
+    F --> G[画像・音声生成<br/>Coqui TTS XTTS v2]
     G --> H[output/temp全クリア→素材保存]
     H --> I[動画生成 WebM/MP4]
     I --> J[output/<PDF名>.webm|mp4]

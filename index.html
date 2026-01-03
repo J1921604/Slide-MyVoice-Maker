@@ -434,11 +434,42 @@
                             const blob = new Blob([arrayBuffer], { type: 'application/pdf' });
                             const fd = new FormData();
                             fd.append('file', blob, file.name);
-                            const res = await fetch('/api/upload/pdf', { method: 'POST', body: fd });
-                            if (!res.ok) throw new Error(`PDF保存失敗: ${res.status}`);
+                            
+                            // タイムアウト付きfetch (30秒)
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 30000);
+                            
+                            try {
+                                const res = await fetch('/api/upload/pdf', { 
+                                    method: 'POST', 
+                                    body: fd,
+                                    signal: controller.signal
+                                });
+                                clearTimeout(timeoutId);
+                                
+                                if (!res.ok) {
+                                    const errorText = await res.text();
+                                    throw new Error(`PDF保存失敗 (${res.status}): ${errorText}`);
+                                }
+                                console.log('PDF保存成功:', file.name);
+                                setStatusMessage('PDF保存完了。スライド展開中...');
+                            } catch (fetchError) {
+                                clearTimeout(timeoutId);
+                                if (fetchError.name === 'AbortError') {
+                                    console.warn('PDF保存タイムアウト（30秒）。バックエンド起動を確認してください。');
+                                    setStatusMessage('PDF保存タイムアウト。スライド展開を続行します...');
+                                } else {
+                                    console.warn('PDF保存に失敗しました:', fetchError);
+                                    setStatusMessage('PDF保存失敗。スライド展開を続行します...');
+                                }
+                                // エラーでも処理を続行（ブラウザ内処理は可能）
+                            }
                         } catch (e) {
-                            console.warn('PDF保存に失敗しました', e);
+                            console.warn('PDF保存処理でエラー:', e);
+                            setStatusMessage('PDF保存処理エラー。スライド展開を続行します...');
                         }
+                    } else {
+                        setStatusMessage('スライド展開中...');
                     }
 
                     const images = await convertPdfToImages(arrayBuffer);

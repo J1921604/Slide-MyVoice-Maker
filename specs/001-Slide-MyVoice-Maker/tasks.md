@@ -3,7 +3,7 @@
 **入力**: `/specs/001-Slide-MyVoice-Maker/` からの設計ドキュメント
 **前提条件**: plan.md（必須）、spec.md（必須）、data-model.md、contracts/
 **バージョン**: 1.0.0
-**開始日**: 2026-01-05
+**開始日**: 2026-1-5
 
 ## 形式: `[ID] [P?] [ストーリー?] 説明`
 
@@ -17,34 +17,43 @@
 
 ```mermaid
 gantt
-    title 実装スケジュール
+    title 実装スケジュール（2026-1-5開始、休日除外）
     dateFormat YYYY-MM-DD
     axisFormat %m/%d
     excludes weekends,2025-12-27,2025-12-28,2025-12-29,2025-12-30,2025-12-31,2026-01-01,2026-01-02,2026-01-03,2026-01-04
 
-    section Phase 1 Setup
-    T001-T003 プロジェクト準備                :done, p1, 2026-01-05, 2d
+    section Phase 1: Setup
+    プロジェクト準備                :done, p1, 2026-01-05, 1d
 
-    section Phase 2 Foundational
-    T004-T006 CLI基盤（解像度/env）            :done, p2, after p1, 2d
+    section Phase 2: Foundational
+    CLI基盤（解像度/env）            :done, p2, after p1, 1d
 
-    section Phase 3 CLI Features
-    T007-T010 解像度選択                       :done, p3, after p2, 1d
+    section Phase 3: US1 Resolution
+    解像度選択機能                   :done, p3, after p2, 1d
 
-    section Phase 4 Temp Update
-    T011-T014 temp上書き                       :done, p4, after p3, 1d
+    section Phase 4: US2 Temp
+    temp上書き機能                   :done, p4, after p3, 1d
 
-    section Phase 5 Web UI
-    T015-T018 Web UI（サーバー連携/字幕/MP4）   :done, p5, after p4, 2d
+    section Phase 5: Web UI
+    Web UI（サーバー連携）            :done, p5, after p4, 2d
+    字幕ON/OFF機能                   :done, p5_sub1, after p4, 2d
+    MP4形式対応                      :done, p5_sub2, after p4, 2d
 
-    section Phase 6 Tests
-    T019-T020 E2Eテスト実行                    :done, p6, after p5, 1d
+    section Phase 6: Testing
+    E2Eテスト実装                    :done, p6, after p5, 1d
 
-    section Phase 7 Docs
-    T021-T024 ドキュメント整合                  :done, p7, after p6, 1d
+    section Phase 7: Documentation
+    ドキュメント整合                  :done, p7, after p6, 1d
+    
+    section Phase 8: Deployment
+    GitHubPages設定                  :done, p8, after p7, 1d
 ```
 
-**注意**: 2026-01-05を基準開始日として設定し、土日・年末年始（12/27-1/4）を除外しています。スケジュールは`after`キーワードで相対的に管理されるため、基準開始日を変更すれば全体が自動調整されます。
+**注意**: 
+- 基準開始日: 2026-1-5
+- 休日除外: 土日・年末年始（12/27-1/4）
+- 相対日付: `after`キーワードで自動調整
+- 基準日変更時: 最初のタスク日付を変更すれば全体が調整されます
 
 ---
 
