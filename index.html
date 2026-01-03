@@ -3,7 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Slide Voice Maker - AI音声付き動画生成ツール</title>
+    <title>Slide MyVoice Maker - AI音声付き動画生成ツール v1.0.1</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -502,13 +505,47 @@
                     
                     // サーバー: input/ にCSVを上書き保存
                     if (localBackendAvailable) {
-                        setStatusMessage('原稿.csvをinput/へ保存中...');
-                        const blob = new Blob([arrayBuffer], { type: 'text/csv' });
-                        const fd = new FormData();
-                        fd.append('file', blob, file.name);
-                        const res = await fetch('/api/upload/csv', { method: 'POST', body: fd });
-                        if (!res.ok) throw new Error(`CSV保存失敗: ${res.status}`);
-                        setStatusMessage('CSV保存完了。ブラウザで原稿プレビュー反映中...');
+                        try {
+                            setStatusMessage('原稿.csvをinput/へ保存中...');
+                            const blob = new Blob([arrayBuffer], { type: 'text/csv' });
+                            const fd = new FormData();
+                            fd.append('file', blob, file.name);
+                            
+                            // タイムアウト付きfetch (30秒)
+                            const controller = new AbortController();
+                            const timeoutId = setTimeout(() => controller.abort(), 30000);
+                            
+                            try {
+                                const res = await fetch('/api/upload/csv', { 
+                                    method: 'POST', 
+                                    body: fd,
+                                    signal: controller.signal
+                                });
+                                clearTimeout(timeoutId);
+                                
+                                if (!res.ok) {
+                                    const errorText = await res.text();
+                                    throw new Error(`CSV保存失敗 (${res.status}): ${errorText}`);
+                                }
+                                console.log('CSV保存成功:', file.name);
+                                setStatusMessage('CSV保存完了。ブラウザで原稿プレビュー反映中...');
+                            } catch (fetchError) {
+                                clearTimeout(timeoutId);
+                                if (fetchError.name === 'AbortError') {
+                                    console.warn('CSV保存タイムアウト（30秒）。バックエンド起動を確認してください。');
+                                    setStatusMessage('CSV保存タイムアウト。原稿読み込みを続行します...');
+                                } else {
+                                    console.warn('CSV保存に失敗しました:', fetchError);
+                                    setStatusMessage('CSV保存失敗。原稿読み込みを続行します...');
+                                }
+                                // エラーでも処理を続行（ブラウザ内処理は可能）
+                            }
+                        } catch (e) {
+                            console.warn('CSV保存処理でエラー:', e);
+                            setStatusMessage('CSV保存処理エラー。原稿読み込みを続行します...');
+                        }
+                    } else {
+                        setStatusMessage('原稿読み込み中...');
                     }
 
                     // arrayBufferからCSVをパース
