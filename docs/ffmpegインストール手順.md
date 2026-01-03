@@ -2,7 +2,7 @@
 
 ## 概要
 
-Slide Voice Makerでは、動画エンコードにFFmpegを使用します。Coqui TTS（XTTS v2）による音声生成では、soundfileライブラリを使用してtorchaudioのバイパスを実装しているため、標準的なFFmpegで十分動作します。
+Slide MyVoice Makerでは、動画エンコードにFFmpegを使用します。Coqui TTS（XTTS v2）による音声生成では、soundfileライブラリを使用してtorchaudioのバイパスを実装しているため、標準的なFFmpegで十分動作します。
 
 **重要**: 本プロジェクトではTorchCodecは不要です。torchaudio.loadをsoundfileで置き換えることで、複雑なDLL依存を回避しています。
 

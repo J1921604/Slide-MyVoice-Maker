@@ -1,4 +1,4 @@
-﻿# タスク一覧: Slide Voice Maker
+﻿# タスク一覧: Slide MyVoice Maker
 
 **入力**: `/specs/001-Slide-MyVoice-Maker/` からの設計ドキュメント
 **前提条件**: plan.md（必須）、spec.md（必須）、data-model.md、contracts/

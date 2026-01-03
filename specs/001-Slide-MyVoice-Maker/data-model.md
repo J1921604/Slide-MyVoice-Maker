@@ -1,11 +1,11 @@
-# データモデル: Slide Voice Maker
+# データモデル: Slide MyVoice Maker
 
-**日付**: 2026-01-05
+**日付**: 2026-1-5
 **Phase**: 1 - 設計
 
 ## 概要
 
-本ドキュメントは、Slide Voice Makerのデータモデルを定義する。
+本ドキュメントは、Slide MyVoice Makerのデータモデルを定義する。
 
 ## エンティティ関係図
 

@@ -1,4 +1,4 @@
-# Web API契約: Slide Voice Maker
+# Web API契約: Slide MyVoice Maker
 
 **日付**: 2026-01-05
 **対象**: index.html（サーバー連携）

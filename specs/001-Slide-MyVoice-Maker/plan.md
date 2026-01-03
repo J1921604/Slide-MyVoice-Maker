@@ -1,12 +1,12 @@
-﻿# 実装計画: Slide Voice Maker
+﻿# 実装計画: Slide MyVoice Maker
 
 **ブランチ**: `001-Slide-MyVoice-Maker`
-**日付**: 2026-01-05
+**日付**: 2026-1-5
 **仕様**: https://github.com/J1921604/Slide-MyVoice-Maker/blob/main/specs/001-Slide-MyVoice-Maker/spec.md
 
 ## 概要
 
-本計画は、Slide Voice Makerツールに以下の機能を追加するための実装計画である:
+本計画は、Slide MyVoice Makerツールに以下の機能を追加するための実装計画である:
 
 1. **出力動画の解像度選択機能**: 720p/1080p/1440pから選択可能
 2. **temp上書き更新機能**: 毎回のビルド時にtempフォルダをクリア

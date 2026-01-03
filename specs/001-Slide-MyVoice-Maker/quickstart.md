@@ -1,11 +1,11 @@
-﻿# クイックスタート: Slide Voice Maker
+﻿# クイックスタート: Slide MyVoice Maker
 
-**日付**: 2026-01-05
+**日付**: 2026-1-5
 **対象**: 開発者・利用者
 
 ## 概要
 
-Slide Voice MakerはPDFスライドと原稿CSVからAI音声ナレーション付き動画（WebM）を自動生成するツールです。
+Slide MyVoice MakerはPDFスライドと原稿CSVから、Coqui TTS (XTTS v2)による自分の声を使ったAI音声ナレーション付き動画（WebM）を自動生成するツールです。
 
 ## 動作環境
 
