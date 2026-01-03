@@ -1,10 +1,40 @@
-﻿# Slide Voice Maker
+﻿# Slide MyVoice Maker
 
 PDFスライドと原稿CSVから、AI音声ナレーション付き動画（WebM）を自動生成するツールです。
 
 **バージョン**: 1.0.0  
-**日付**: 2026-01-05  
+**日付**: 2026-1-5  
 **リポジトリ**: https://github.com/J1921604/Slide-MyVoice-Maker
+
+## 🎯 音声生成技術
+
+### Coqui TTS (XTTS v2)
+
+このプロジェクトは **Coqui TTS（XTTS v2）** を使用して、あなた自身の声を使った音声ナレーションを生成します。
+
+```mermaid
+flowchart LR
+    A[音声サンプル<br/>sample.wav] --> B[XTTS v2<br/>モデル]
+    C[原稿テキスト] --> B
+    B --> D[生成音声<br/>*.wav]
+    D --> E[動画生成<br/>WebM/MP4]
+```
+
+#### 特徴
+
+- **自分の声**: わずか3-10秒の音声サンプルで、あなたの声を再現
+- **多言語対応**: 日本語を含む複数言語に対応
+- **オープンソース**: 完全にオープンソースで、ローカル実行可能
+- **高品質**: 自然な抑揚とイントネーションを再現
+
+#### 音声サンプル作成
+
+```bash
+# 音声サンプルを録音
+py -3.10 src\voice\create_voice.py
+```
+
+録音後、`src/voice/models/samples/sample.wav` が自動的に使用されます。
 
 ## 📦 機能概要
 

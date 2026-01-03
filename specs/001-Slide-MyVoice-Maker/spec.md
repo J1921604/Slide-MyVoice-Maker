@@ -1,13 +1,13 @@
-﻿# 機能仕様書: Slide Voice Maker
+﻿# 機能仕様書: Slide MyVoice Maker
 
 **機能ブランチ**: `001-Slide-MyVoice-Maker`
-**作成日**: 2026-01-05
+**作成日**: 2026-1-5
 **バージョン**: 1.0.0
 **状態**: 承認済
 
 ## 概要
 
-Slide Voice Makerは、PDFスライドと原稿CSVからAI音声ナレーション付き動画（WebM/MP4）を自動生成し、PPTXや原稿CSVとしても出力できるツールである。
+Slide MyVoice Makerは、PDFスライドと原稿CSVから、**Coqui TTS (XTTS v2)** を使用した自分の声によるAI音声ナレーション付き動画（WebM/MP4）を自動生成し、PPTXや原稿CSVとしても出力できるツールである。
 
 本仕様では以下の機能を定義する:
 

@@ -1,12 +1,12 @@
 ﻿# デプロイガイド (GitHub Pages + ローカルバックエンド)
 
 **バージョン**: 1.0.0  
-**日付**: 2026-01-05  
+**日付**: 2026-1-5  
 **リポジトリ**: https://github.com/J1921604/Slide-MyVoice-Maker
 
 ## アーキテクチャ概要
 - フロントエンド: 静的 `index.html` を GitHub Pages で配信
-- バックエンド: ローカル FastAPI (`src/server.py`)、音声生成と動画合成を担当
+- バックエンド: ローカル FastAPI (`src/server.py`)、**Coqui TTS (XTTS v2)** による音声生成と動画合成を担当
 - 通信: ブラウザから `http://127.0.0.1:8000` へアクセス（CORS不要の同一オリジンを推奨）
 
 ```mermaid
