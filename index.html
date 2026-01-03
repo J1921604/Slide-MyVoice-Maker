@@ -88,17 +88,24 @@
         const fetchJson = async (url, options = {}, timeoutMs = 180000) => {
             const ctrl = new AbortController();
             const t = setTimeout(() => ctrl.abort(), timeoutMs);
+            const startTime = Date.now();
             try {
+                console.log(`[fetchJson] リクエスト開始: ${url}, タイムアウト: ${timeoutMs/1000}秒`);
                 const res = await fetch(url, { ...options, signal: ctrl.signal });
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+                console.log(`[fetchJson] レスポンス受信: ${res.status} (${elapsed}秒)`);
                 if (!res.ok) {
                     const text = await res.text().catch(() => '');
                     throw new Error(`${res.status} ${res.statusText}${text ? `: ${text}` : ''}`);
                 }
                 return await res.json();
             } catch (err) {
+                const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
                 if (err.name === 'AbortError') {
-                    throw new Error(`タイムアウト（${timeoutMs/1000}秒超過）: サーバー応答がありませんでした。Coqui TTSの初回実行時は時間がかかる場合があります。`);
+                    console.error(`[fetchJson] タイムアウト: ${url} (${elapsed}秒/${timeoutMs/1000}秒)`);
+                    throw new Error(`タイムアウト（${timeoutMs/1000}秒超過、実測${elapsed}秒）: サーバー応答がありませんでした。Coqui TTSの初回実行時は時間がかかる場合があります。サーバーログを確認してください。`);
                 }
+                console.error(`[fetchJson] エラー: ${url}`, err);
                 throw err;
             } finally {
                 clearTimeout(t);
@@ -600,7 +607,7 @@
                     // 全スライドの音声を生成（画像も送信）
                     for (let i = 0; i < slides.length; i++) {
                         const slide = slides[i];
-                        setStatusMessage(`音声生成中... (${i + 1}/${slides.length}) ${i === 0 ? '初回はモデルロードに時間がかかります' : ''}`);
+                        setStatusMessage(`音声生成中... (${i + 1}/${slides.length}) ${i === 0 ? '初回はモデルロード（2-3分）に時間がかかります。コンソールで進捗確認できます。' : ''}`);
                         
                         const body = JSON.stringify({ 
                             output_name: pdfBaseName,
@@ -613,7 +620,7 @@
                             method: 'POST', 
                             headers: { 'Content-Type': 'application/json' }, 
                             body 
-                        }, 300000);
+                        }, 600000); // 10分タイムアウト
                         
                         if (res && res.audio_url) {
                             setSlides(prev => {
@@ -664,7 +671,7 @@
                         method: 'POST', 
                         headers: { 'Content-Type': 'application/json' }, 
                         body 
-                    }, 300000);
+                    }, 600000); // 10分タイムアウト
                     
                     if (res && res.audio_url) {
                         setSlides(prev => {
