@@ -237,15 +237,40 @@ imageio-ffmpegが自動でFFmpegをダウンロードしますが、問題があ
 pip install --upgrade imageio-ffmpeg
 ```
 
-### 音声が生成されない
+### 音声が生成されない / タイムアウトエラー
 
-Coqui TTSの初回実行時はモデルダウンロードに30-60秒かかります。音声サンプルファイル（`src/voice/models/samples/sample.wav`）が必要です。
+**初回実行時の注意**: Coqui TTS (XTTS v2)モデルのダウンロードとロードに2-3分かかります。
 
-自分の声で音声生成する場合、`src/voice/create_voice.py`を実行して音声サンプルを録音してください。
+**症状**: 「音声生成失敗: タイムアウト」エラー
 
-```bash
-py -3.10 src\voice\create_voice.py
-```
+**対策**:
+1. **サーバーが起動しているか確認**:
+   ```powershell
+   # ポート8000を確認
+   netstat -ano | findstr :8000
+   
+   # サーバーヘルスチェック
+   Invoke-WebRequest -Uri "http://127.0.0.1:8000/api/health"
+   ```
+
+2. **初回は10分程度待つ**: モデルダウンロードとロードに時間がかかります
+   - ブラウザのコンソール（F12）で進捗を確認できます
+   - `[fetchJson] リクエスト開始` と表示されていれば処理中です
+
+3. **音声サンプルファイルを確認**:
+   ```bash
+   # ファイルが存在するか確認
+   Test-Path src\voice\models\samples\sample.wav
+   
+   # 存在しない場合は録音
+   py -3.10 src\voice\create_voice.py
+   ```
+
+4. **サーバーを再起動**:
+   ```powershell
+   # start.ps1で再起動
+   powershell -ExecutionPolicy Bypass -File start.ps1
+   ```
 
 ### バックエンドが検出されない
 
